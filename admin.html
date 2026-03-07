@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="favicons/favicon_v01.png" type="image/png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Brain Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body { min-height: 100vh; padding: 110px 24px 40px; }
+        main { max-width: 1200px; margin: 0 auto; }
+        .admin-grid { display: grid; grid-template-columns: 340px 1fr; gap: 24px; }
+        .card {
+            background: #121A2B;
+            border: 1px solid #1A2438;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.35);
+        }
+        .card h1, .card h2, .card h3 { color: #E6EDF7; margin-bottom: 12px; }
+        .muted { color: rgba(230,237,247,.65); }
+        .stack { display: grid; gap: 12px; }
+        .field { display: grid; gap: 8px; }
+        .field input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #1A2438;
+            background: rgba(11,18,32,.85);
+            color: #E6EDF7;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1px solid #1A2438;
+            background: #3B82F6;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn.secondary { background: rgba(59,130,246,.15); color: #E6EDF7; }
+        .status { min-height: 18px; color: #93C5FD; }
+        .user-list { display: grid; gap: 10px; }
+        .user-item {
+            display: grid;
+            gap: 4px;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid #1A2438;
+            background: rgba(11,18,32,.6);
+            cursor: pointer;
+        }
+        .user-item.active { border-color: #3B82F6; background: rgba(59,130,246,.12); }
+        .detail-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
+        .category-block { border-top: 1px solid #1A2438; padding-top: 16px; margin-top: 16px; }
+        .category-block pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: rgba(11,18,32,.7);
+            color: #E6EDF7;
+            padding: 14px;
+            border-radius: 12px;
+            overflow: auto;
+        }
+        .hidden { display: none !important; }
+        @media (max-width: 900px) {
+            .admin-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html" class="logo">DIGITAL BRAIN</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="admin.html" class="active">Admin</a>
+        </div>
+    </nav>
+    <main>
+        <div class="admin-grid">
+            <section class="card">
+                <div id="admin-login-panel" class="stack">
+                    <h1>Admin</h1>
+                    <p class="muted">Use the admin password to inspect users and their saved category data.</p>
+                    <form id="admin-login-form" class="stack">
+                        <label class="field">
+                            <span class="muted">Admin Password</span>
+                            <input type="password" id="admin-password" required>
+                        </label>
+                        <button class="btn" type="submit">Log In</button>
+                    </form>
+                    <p class="status" id="admin-status"></p>
+                </div>
+                <div id="admin-session-panel" class="stack hidden">
+                    <h2>Admin Session</h2>
+                    <p class="muted">You can inspect all users and their stored category payloads from here.</p>
+                    <button class="btn secondary" id="refresh-users-btn" type="button">Refresh Users</button>
+                    <button class="btn secondary" id="admin-logout-btn" type="button">Log Out</button>
+                </div>
+            </section>
+            <section class="card">
+                <div class="detail-header">
+                    <div>
+                        <h2>Users</h2>
+                        <p class="muted" id="users-summary">Not loaded</p>
+                    </div>
+                </div>
+                <div id="users-panel" class="user-list"></div>
+                <div id="user-detail" class="hidden"></div>
+            </section>
+        </div>
+    </main>
+    <script type="module" src="admin.js"></script>
+</body>
+</html>

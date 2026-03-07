@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT)))
 DB_PATH = Path(os.environ.get("DB_PATH", str(DATA_DIR / "digital_brain.db")))
 SESSION_COOKIE = "digital_brain_session"
+ADMIN_COOKIE = "digital_brain_admin"
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_TOKENS = set()
 
 CATEGORY_DEFINITIONS = {
     "books": {"name": "Books", "columns": ["Title", "Author", "Status", "Rating", "Notes"]},
@@ -191,6 +194,62 @@ def upsert_category(user_id, slug, payload):
     return payload
 
 
+def list_users_with_counts():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+        SELECT
+            users.id,
+            users.username,
+            users.username_key,
+            COUNT(categories.slug) AS category_count
+        FROM users
+        LEFT JOIN categories ON categories.user_id = users.id
+        GROUP BY users.id, users.username, users.username_key
+        ORDER BY users.id ASC
+        """
+    ).fetchall()
+    connection.close()
+    return [dict(row) for row in rows]
+
+
+def get_user_detail(user_id):
+    connection = get_connection()
+    user = connection.execute(
+        "SELECT id, username, username_key FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    if not user:
+        connection.close()
+        return None
+    categories = connection.execute(
+        "SELECT slug, payload FROM categories WHERE user_id = ? ORDER BY slug ASC",
+        (user_id,),
+    ).fetchall()
+    connection.close()
+    return {
+        "user": dict(user),
+        "categories": [
+            {
+                "slug": row["slug"],
+                "payload": json.loads(row["payload"]),
+            }
+            for row in categories
+        ],
+    }
+
+
+def create_admin_session():
+    token = secrets.token_urlsafe(32)
+    ADMIN_TOKENS.add(token)
+    return token
+
+
+def destroy_admin_session(token):
+    if token:
+        ADMIN_TOKENS.discard(token)
+
+
 class AppHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -199,6 +258,12 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/session":
             return self.handle_session()
+        if parsed.path == "/api/admin/session":
+            return self.handle_admin_session()
+        if parsed.path == "/api/admin/users":
+            return self.handle_admin_users()
+        if parsed.path.startswith("/api/admin/user/"):
+            return self.handle_admin_user_detail(parsed.path.split("/")[-1])
         if parsed.path.startswith("/api/category/"):
             return self.handle_get_category(parsed.path.split("/")[-1])
         return super().do_GET()
@@ -213,6 +278,10 @@ class AppHandler(SimpleHTTPRequestHandler):
             return self.handle_demo_login()
         if parsed.path == "/api/logout":
             return self.handle_logout()
+        if parsed.path == "/api/admin/login":
+            return self.handle_admin_login()
+        if parsed.path == "/api/admin/logout":
+            return self.handle_admin_logout()
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_PUT(self):
@@ -250,6 +319,19 @@ class AppHandler(SimpleHTTPRequestHandler):
     def current_user(self):
         return get_user_by_session(self.session_token())
 
+    def admin_token(self):
+        cookie_header = self.headers.get("Cookie")
+        if not cookie_header:
+            return None
+        cookie = SimpleCookie()
+        cookie.load(cookie_header)
+        morsel = cookie.get(ADMIN_COOKIE)
+        return morsel.value if morsel else None
+
+    def is_admin(self):
+        token = self.admin_token()
+        return token in ADMIN_TOKENS
+
     def require_user(self):
         user = self.current_user()
         if not user:
@@ -257,9 +339,18 @@ class AppHandler(SimpleHTTPRequestHandler):
             return None
         return user
 
+    def require_admin(self):
+        if not self.is_admin():
+            self.send_json(HTTPStatus.UNAUTHORIZED, {"error": "Admin login required."})
+            return None
+        return True
+
     def handle_session(self):
         user = self.current_user()
         self.send_json(HTTPStatus.OK, {"user": {"username": user["username"]} if user else None})
+
+    def handle_admin_session(self):
+        self.send_json(HTTPStatus.OK, {"authenticated": self.is_admin()})
 
     def handle_signup(self):
         data = self.parse_json()
@@ -334,6 +425,48 @@ class AppHandler(SimpleHTTPRequestHandler):
     def handle_logout(self):
         destroy_session(self.session_token())
         self.send_json(HTTPStatus.OK, {"ok": True}, clear_cookie=True)
+
+    def handle_admin_login(self):
+        data = self.parse_json()
+        password = data.get("password") or ""
+        if not hmac.compare_digest(password, ADMIN_PASSWORD):
+            return self.send_json(HTTPStatus.UNAUTHORIZED, {"error": "Incorrect admin password."})
+        token = create_admin_session()
+        self.send_json(
+            HTTPStatus.OK,
+            {"ok": True},
+            cookie=f"{ADMIN_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+        )
+
+    def handle_admin_logout(self):
+        destroy_admin_session(self.admin_token())
+        self.send_json(
+            HTTPStatus.OK,
+            {"ok": True},
+            clear_cookie=False,
+            cookie=f"{ADMIN_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        )
+
+    def handle_admin_users(self):
+        if not self.require_admin():
+            return
+        users = list_users_with_counts()
+        for user in users:
+            detail = get_user_detail(user["id"])
+            user["total_entries"] = sum(len(category["payload"].get("rows", [])) for category in detail["categories"])
+        self.send_json(HTTPStatus.OK, {"users": users})
+
+    def handle_admin_user_detail(self, user_id_raw):
+        if not self.require_admin():
+            return
+        try:
+            user_id = int(user_id_raw)
+        except ValueError:
+            return self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid user id."})
+        detail = get_user_detail(user_id)
+        if not detail:
+            return self.send_json(HTTPStatus.NOT_FOUND, {"error": "User not found."})
+        self.send_json(HTTPStatus.OK, detail)
 
     def handle_get_category(self, slug):
         slug = unquote(slug)
