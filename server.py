@@ -12,7 +12,8 @@ from urllib.parse import unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "digital_brain.db"
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT)))
+DB_PATH = Path(os.environ.get("DB_PATH", str(DATA_DIR / "digital_brain.db")))
 SESSION_COOKIE = "digital_brain_session"
 
 CATEGORY_DEFINITIONS = {
@@ -64,6 +65,7 @@ def default_category_payload(slug):
 
 
 def ensure_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = get_connection()
     cursor = connection.cursor()
     cursor.execute(
@@ -363,8 +365,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 def main():
     ensure_db()
     port = int(os.environ.get("PORT", "4173"))
-    server = ThreadingHTTPServer(("127.0.0.1", port), AppHandler)
-    print(f"Digital Brain running at http://127.0.0.1:{port}")
+    server = ThreadingHTTPServer(("0.0.0.0", port), AppHandler)
+    print(f"Digital Brain running at http://0.0.0.0:{port}")
     server.serve_forever()
 
 
