@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="favicons/favicon_v01.png" type="image/png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Brain</title>
+    <meta name="description" content="Create and explore your own digital brain.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preload" href="https://unpkg.com/three@0.160.0/build/three.module.js" as="script" crossorigin>
+    <style>
+        body { overflow: hidden; }
+        nav { z-index: 1000; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #info-panel, #account-panel, #region-list {
+            position: fixed;
+            background: #121A2B;
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            color: #E6EDF7;
+            border: 1px solid #1A2438;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        #info-panel { top: 80px; left: 20px; padding: 24px; max-width: 320px; display: none; }
+        #account-panel { left: 20px; bottom: 110px; width: 320px; padding: 20px; z-index: 60; }
+        #account-panel h3, #region-list h3 { margin-bottom: 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: rgba(230, 237, 247, 0.5); }
+        #account-panel p, #info-panel p { line-height: 1.7; margin-bottom: 14px; color: rgba(230, 237, 247, 0.85); font-size: 14px; }
+        #account-panel form { display: grid; gap: 10px; margin-bottom: 12px; }
+        #account-panel input {
+            width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #1A2438;
+            background: rgba(11, 18, 32, 0.9); color: #E6EDF7;
+        }
+        #account-panel button, #info-panel a, #session-view button {
+            display: inline-flex; justify-content: center; align-items: center; background: #3B82F6; color: white;
+            padding: 10px 16px; border-radius: 8px; border: none; text-decoration: none; font-weight: 600; font-size: 14px; cursor: pointer;
+        }
+        #session-view button { background: rgba(59, 130, 246, 0.2); color: #E6EDF7; }
+        #close-btn {
+            position: absolute; top: 12px; right: 12px; background: rgba(59, 130, 246, 0.2); border: none; color: #E6EDF7;
+            font-size: 18px; cursor: pointer; width: 28px; height: 28px; border-radius: 50%;
+        }
+        #panel-brain-region { font-size: 12px; letter-spacing: 1px; color: #60A5FA; margin-bottom: 12px; }
+        #region-list { top: 80px; right: 20px; padding: 20px; }
+        #region-list ul { list-style: none; }
+        #region-list li {
+            padding: 8px 12px; margin: 4px 0; border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        #region-list li:hover { background: rgba(59, 130, 246, 0.2); }
+        #region-list li .dot { width: 10px; height: 10px; border-radius: 50%; }
+        #page-header {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 50;
+        }
+        #page-title {
+            color: #E6EDF7; font-size: 32px; font-weight: 700; letter-spacing: 4px; text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); margin-bottom: 8px;
+        }
+        #page-subtitle { color: #60A5FA; font-size: 16px; font-weight: 300; }
+        .hotspot-label {
+            color: #E6EDF7; font-size: 12px; font-weight: 600; text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 0 3px rgba(0,0,0,1);
+            white-space: nowrap; pointer-events: none;
+        }
+        #instructions {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #121A2B; backdrop-filter: blur(10px);
+            padding: 14px 28px; border-radius: 30px; color: rgba(230, 237, 247, 0.8); font-size: 13px; border: 1px solid #1A2438;
+        }
+        .mobile-only { display: none; }
+        #auth-message { min-height: 18px; color: #93C5FD; }
+        @media (max-width: 768px) {
+            .desktop-only { display: none; }
+            .mobile-only { display: inline; }
+            #page-title { font-size: 22px; letter-spacing: 2px; }
+            #page-subtitle { font-size: 13px; }
+            #region-list { top: auto; bottom: 40px; right: 10px; left: 10px; max-height: 180px; overflow-y: auto; padding: 12px; }
+            #account-panel { left: 10px; right: 10px; width: auto; bottom: 250px; }
+            #info-panel { top: auto; bottom: 430px; left: 10px; right: 10px; max-width: none; padding: 16px; }
+            #instructions { bottom: 10px; padding: 10px 16px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html" class="logo">DIGITAL BRAIN</a>
+        <div class="nav-links">
+            <a href="index.html" class="active">Home</a>
+        </div>
+    </nav>
+
+    <div id="canvas-container"></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading 3D Brain...</div>
+    </div>
+
+    <div id="page-header">
+        <h1 id="page-title">DIGITAL BRAIN</h1>
+        <p id="page-subtitle">Explore a digitized map of your own brain</p>
+    </div>
+
+    <div id="info-panel">
+        <button id="close-btn">&times;</button>
+        <h2 id="panel-title">Region Name</h2>
+        <p id="panel-brain-region"></p>
+        <p id="panel-description"></p>
+        <a id="panel-link" href="#">Open Region</a>
+    </div>
+
+    <div id="account-panel">
+        <h3>Brain Access</h3>
+        <div id="auth-forms">
+            <form id="signup-form">
+                <input type="text" id="signup-username" placeholder="Create username" required>
+                <input type="password" id="signup-password" placeholder="Create password" required>
+                <button type="submit">Create Brain</button>
+            </form>
+            <form id="login-form">
+                <input type="text" id="login-username" placeholder="Username" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit">Sign In</button>
+            </form>
+            <button id="demo-login-btn" type="button">Use Demo Brain</button>
+        </div>
+        <div id="session-view" style="display:none;">
+            <p id="session-username"></p>
+            <button id="logout-btn" type="button">Log Out</button>
+        </div>
+        <p id="auth-message"></p>
+    </div>
+
+    <div id="region-list">
+        <h3>Brain Regions</h3>
+        <ul id="regions"></ul>
+    </div>
+
+    <div id="instructions">
+        <span class="desktop-only">Drag to rotate &bull; Scroll to zoom &bull; Click regions to open your sheet</span>
+        <span class="mobile-only">Swipe to rotate &bull; Pinch to zoom &bull; Tap regions to open your sheet</span>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="home.js"></script>
+</body>
+</html>
