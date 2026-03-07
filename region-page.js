@@ -1,4 +1,4 @@
-import { CATEGORY_DEFINITIONS, createEmptyRow, getCategory, getSessionUsername, login, loginDemo, logout, saveCategory, signup } from "./brain-store.js";
+import { CATEGORY_DEFINITIONS, createEmptyRow, getCategory, getSessionUsername, login, logout, saveCategory, signup } from "./brain-store.js";
 
 const slug = window.location.pathname.split("/").pop().replace(".html", "");
 const definition = CATEGORY_DEFINITIONS[slug];
@@ -75,17 +75,6 @@ function attachEvents() {
         event.preventDefault();
         try {
             await login(document.getElementById("login-username").value, document.getElementById("login-password").value);
-            closeAuthModal();
-            await syncSessionUi();
-            await renderPage();
-        } catch (error) {
-            document.getElementById("auth-message").textContent = error.message;
-        }
-    });
-
-    document.getElementById("demo-login-btn").addEventListener("click", async () => {
-        try {
-            await loginDemo();
             closeAuthModal();
             await syncSessionUi();
             await renderPage();

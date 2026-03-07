@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
-import { CATEGORY_DEFINITIONS, HOME_REGIONS, getSessionUsername, login, loginDemo, logout, signup } from "./brain-store.js";
+import { CATEGORY_DEFINITIONS, HOME_REGIONS, getSessionUsername, login, logout, signup } from "./brain-store.js";
 
 const authMessage = document.getElementById("auth-message");
 const authForms = document.getElementById("auth-forms");
@@ -46,17 +46,6 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
 
 document.getElementById("logout-btn").addEventListener("click", () => {
     logout().then(syncAuthUi);
-});
-
-document.getElementById("demo-login-btn").addEventListener("click", () => {
-    loginDemo().then(() => {
-        authMessage.textContent = "Demo brain active. Opening Movies.";
-        return syncAuthUi();
-    }).then(() => {
-        window.location.href = "movies.html";
-    }).catch((error) => {
-        authMessage.textContent = error.message;
-    });
 });
 
 async function syncAuthUi() {
