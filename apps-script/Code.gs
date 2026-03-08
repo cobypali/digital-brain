@@ -47,6 +47,14 @@ function doPost(e) {
   }
 }
 
+function doGet() {
+  return jsonResponse({
+    ok: true,
+    status: 'healthy',
+    service: 'digital-brain-apps-script'
+  });
+}
+
 function jsonResponse(payload) {
   return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
 }

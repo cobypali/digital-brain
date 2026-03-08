@@ -82,7 +82,12 @@ async function request(action, payload = {}) {
         body: JSON.stringify({ action, ...payload })
     });
     const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
+    let data = {};
+    try {
+        data = text ? JSON.parse(text) : {};
+    } catch (error) {
+        throw new Error(`Apps Script returned a non-JSON response. Recheck deployment access and redeploy the web app. Raw response: ${text.slice(0, 120)}`);
+    }
     if (!response.ok || data.ok === false) {
         throw new Error(data.error || "Request failed.");
     }
