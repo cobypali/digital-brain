@@ -21,6 +21,8 @@ const state = {
     category: null,
     sort: { field: definition?.columns[0] ?? "Title", order: "asc" },
     editing: false,
+    busy: false,
+    busyMessage: "",
     username: null,
     usernameKey: null,
     viewedBrain: null
@@ -138,9 +140,15 @@ function attachEvents() {
     document.getElementById("add-row-btn").addEventListener("click", async () => {
         const row = createEmptyRow(slug);
         state.category.rows.unshift(row);
-        await saveCategory(slug, state.category);
-        await renderPage();
-        openEditor(row.id);
+        try {
+            await runBusyAction("Adding row...", async () => {
+                await saveCategory(slug, state.category);
+                await renderPage();
+                openEditor(row.id);
+            });
+        } catch (error) {
+            // Status text already reflects the failure.
+        }
     });
 
     document.getElementById("edit-row-form").addEventListener("submit", async (event) => {
@@ -154,8 +162,14 @@ function attachEvents() {
         state.category.columns.forEach((column) => {
             row.values[column] = event.currentTarget.elements[column].value.trim();
         });
-        closeEditor();
-        await saveAndRender();
+        try {
+            await runBusyAction("Saving changes...", async () => {
+                closeEditor();
+                await saveAndRender();
+            });
+        } catch (error) {
+            // Status text already reflects the failure.
+        }
     });
 
     document.addEventListener("keydown", (event) => {
@@ -208,8 +222,10 @@ function renderPageFromState() {
     document.getElementById("item-count").textContent = ownerName
         ? `${state.category.rows.length} entr${state.category.rows.length === 1 ? "y" : "ies"} in ${ownerName}'s sheet`
         : `${state.category.rows.length} entr${state.category.rows.length === 1 ? "y" : "ies"} loaded`;
+    document.getElementById("page-status").textContent = state.busyMessage;
     document.getElementById("editor-toolbar").style.display = state.editing && canEdit ? "flex" : "none";
     document.getElementById("content").innerHTML = renderTableHtml();
+    syncBusyUi();
     bindTableHandlers();
 }
 
@@ -251,6 +267,9 @@ function renderTableHtml() {
 function bindTableHandlers() {
     document.querySelectorAll("th[data-sort]").forEach((th) => {
         th.addEventListener("click", async () => {
+            if (state.busy) {
+                return;
+            }
             const field = th.dataset.sort;
             state.sort = { field, order: state.sort.field === field && state.sort.order === "asc" ? "desc" : "asc" };
             await renderPage();
@@ -262,13 +281,24 @@ function bindTableHandlers() {
     });
 
     document.querySelectorAll('[data-action="edit"]').forEach((button) => {
-        button.addEventListener("click", () => openEditor(button.dataset.row));
+        button.addEventListener("click", () => {
+            if (state.busy) {
+                return;
+            }
+            openEditor(button.dataset.row);
+        });
     });
 
     document.querySelectorAll('[data-action="delete"]').forEach((button) => {
         button.addEventListener("click", async () => {
             state.category.rows = state.category.rows.filter((row) => row.id !== button.dataset.row);
-            await saveAndRender();
+            try {
+                await runBusyAction("Deleting row...", async () => {
+                    await saveAndRender();
+                });
+            } catch (error) {
+                // Status text already reflects the failure.
+            }
         });
     });
 }
@@ -340,6 +370,49 @@ window.closeEditor = closeEditor;
 async function saveAndRender() {
     await saveCategory(slug, state.category);
     await renderPage();
+}
+
+function syncBusyUi() {
+    document.querySelectorAll(".toolbar-btn, .table-action").forEach((button) => {
+        if (button.id === "edit-toggle-btn" && !state.busy) {
+            return;
+        }
+        button.disabled = state.busy;
+    });
+
+    const addRowButton = document.getElementById("add-row-btn");
+    if (addRowButton) {
+        addRowButton.textContent = state.busy && state.busyMessage === "Adding row..." ? "Adding..." : "Add Row";
+    }
+
+    const editToggleButton = document.getElementById("edit-toggle-btn");
+    editToggleButton.disabled = state.busy || editToggleButton.disabled;
+
+    const saveButton = document.querySelector("#edit-row-form button[type='submit']");
+    if (saveButton) {
+        saveButton.textContent = state.busy && state.busyMessage === "Saving changes..." ? "Saving..." : "Save Changes";
+    }
+}
+
+async function runBusyAction(message, action) {
+    state.busy = true;
+    state.busyMessage = message;
+    renderPageFromState();
+    try {
+        await action();
+        state.busyMessage = "";
+        renderPageFromState();
+    } catch (error) {
+        state.busyMessage = error.message;
+        renderPageFromState();
+        throw error;
+    } finally {
+        state.busy = false;
+        if (!state.busyMessage || state.busyMessage === message) {
+            state.busyMessage = "";
+        }
+        renderPageFromState();
+    }
 }
 
 function applyPageIdentity() {

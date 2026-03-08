@@ -38,6 +38,7 @@
         .page-subtitle { text-align: center; color: rgba(230, 237, 247, 0.7); }
         .page-title-wrap { flex: 1; }
         .item-count { text-align: right; font-size: 13px; color: rgba(230, 237, 247, 0.5); margin-bottom: 16px; }
+        .page-status { min-height: 18px; margin-bottom: 14px; text-align: right; font-size: 12px; color: #93C5FD; }
         .session-toolbar, #editor-toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 18px; }
         .toolbar-btn, .table-action {
             background: rgba(18, 26, 43, 0.85); border: 1px solid #1A2438; color: #E6EDF7; padding: 10px 14px; border-radius: 10px; font-size: 13px;
@@ -45,6 +46,7 @@
         .toolbar-btn, .table-action { cursor: pointer; transition: background 0.2s; }
         .toolbar-btn:hover, .table-action:hover { background: rgba(59, 130, 246, 0.2); }
         .toolbar-btn.primary { background: #3B82F6; border-color: #3B82F6; }
+        .toolbar-btn[disabled], .table-action[disabled] { opacity: 0.65; cursor: wait; }
         .table-action.delete { color: #FCA5A5; }
         .loading, .error { text-align: center; padding: 60px; color: #60A5FA; }
         .table-container { overflow-x: auto; border: 1px solid #1A2438; border-radius: 12px; background: rgba(18, 26, 43, 0.5); }
@@ -129,6 +131,7 @@
             <div id="editor-toolbar" style="display:none;">
                 <button class="toolbar-btn primary" id="add-row-btn" type="button">Add Row</button>
             </div>
+            <p class="page-status" id="page-status"></p>
             <p class="item-count" id="item-count"></p>
             <div id="content"><div class="loading"><p>Loading sheet...</p></div></div>
         </div>
