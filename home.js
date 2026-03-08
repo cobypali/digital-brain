@@ -130,21 +130,37 @@ function renderRegionNav(isVisible) {
 
 function showInfo(slug) {
     const definition = CATEGORY_DEFINITIONS[slug];
+    const canOpen = canOpenRegions();
     document.getElementById("panel-title").textContent = definition.name;
     document.getElementById("panel-title").style.color = `#${definition.color.toString(16).padStart(6, "0")}`;
     document.getElementById("panel-brain-region").textContent = `Located in the ${definition.brainRegion}`;
-    document.getElementById("panel-description").textContent = definition.description;
-    document.getElementById("panel-link").href = resolveRegionHref(slug);
+    document.getElementById("panel-description").textContent = canOpen
+        ? definition.description
+        : `${definition.description} Sign in to open your own brain regions.`;
+    document.getElementById("panel-link").href = canOpen ? resolveRegionHref(slug) : "#";
+    document.getElementById("panel-link").textContent = canOpen ? "Open Region" : "Sign In To Open";
+    document.getElementById("panel-link").onclick = canOpen ? null : (event) => {
+        event.preventDefault();
+        authIdentifier.focus();
+    };
     infoPanel.style.display = "block";
 }
 
 function openRegion(slug) {
+    if (!canOpenRegions()) {
+        showInfo(slug);
+        return;
+    }
     window.location.href = resolveRegionHref(slug);
 }
 
 function resolveRegionHref(slug) {
     const targetUsernameKey = viewedBrain?.usernameKey || activeUsernameKey || "";
     return buildBrainPath(targetUsernameKey, slug);
+}
+
+function canOpenRegions() {
+    return Boolean(viewedBrain?.usernameKey || activeUsernameKey);
 }
 
 function setAuthMode(mode) {
