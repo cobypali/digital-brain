@@ -118,14 +118,14 @@ export async function getSessionUsername() {
     return user?.username ?? null;
 }
 
-export async function signup(username, password) {
-    const data = await request("signup", { username, password });
+export async function signup(username, email, password) {
+    const data = await request("signup", { username, email, password });
     setSession({ token: data.token, username: data.user.username });
     return data.user;
 }
 
-export async function login(username, password) {
-    const data = await request("login", { username, password });
+export async function login(identifier, password) {
+    const data = await request("login", { identifier, password });
     setSession({ token: data.token, username: data.user.username });
     return data.user;
 }

@@ -8,41 +8,54 @@ const authMessage = document.getElementById("auth-message");
 const authForms = document.getElementById("auth-forms");
 const sessionView = document.getElementById("session-view");
 const sessionUsername = document.getElementById("session-username");
-const regionsList = document.getElementById("regions");
 const infoPanel = document.getElementById("info-panel");
+const authForm = document.getElementById("auth-form");
+const authIdentifier = document.getElementById("auth-identifier");
+const authEmail = document.getElementById("auth-email");
+const authPassword = document.getElementById("auth-password");
+const authSubmitBtn = document.getElementById("auth-submit-btn");
+const authHelper = document.getElementById("auth-helper");
+const authModeLoginBtn = document.getElementById("auth-mode-login");
+const authModeSignupBtn = document.getElementById("auth-mode-signup");
 let activeUsername = null;
+let authMode = "login";
+let authBusy = false;
 
 document.getElementById("close-btn").addEventListener("click", () => {
     infoPanel.style.display = "none";
 });
 
-document.getElementById("signup-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-        await signup(
-            document.getElementById("signup-username").value,
-            document.getElementById("signup-password").value
-        );
-        authMessage.textContent = "Brain created. Opening Movies.";
-        await syncAuthUi();
-        window.location.href = "movies.html";
-    } catch (error) {
-        authMessage.textContent = error.message;
-    }
-});
+authModeLoginBtn.addEventListener("click", () => setAuthMode("login"));
+authModeSignupBtn.addEventListener("click", () => setAuthMode("signup"));
 
-document.getElementById("login-form").addEventListener("submit", async (event) => {
+authForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (authBusy) {
+        return;
+    }
+
     try {
-        await login(
-            document.getElementById("login-username").value,
-            document.getElementById("login-password").value
-        );
-        authMessage.textContent = "Signed in. Opening Movies.";
+        setAuthBusy(true);
+        if (authMode === "signup") {
+            await signup(
+                authIdentifier.value,
+                authEmail.value,
+                authPassword.value
+            );
+            authMessage.textContent = "Brain created. Opening Movies.";
+        } else {
+            await login(
+                authIdentifier.value,
+                authPassword.value
+            );
+            authMessage.textContent = "Signed in. Opening Movies.";
+        }
         await syncAuthUi();
         window.location.href = "movies.html";
     } catch (error) {
         authMessage.textContent = error.message;
+    } finally {
+        setAuthBusy(false);
     }
 });
 
@@ -72,18 +85,29 @@ function openRegion(slug) {
     window.location.href = `${slug}.html`;
 }
 
-function createRegionList() {
-    regionsList.innerHTML = "";
-    HOME_REGIONS.forEach((region) => {
-        const definition = CATEGORY_DEFINITIONS[region.slug];
-        const li = document.createElement("li");
-        li.innerHTML = `<span class="dot" style="background: #${definition.color.toString(16).padStart(6, "0")}"></span>${definition.name}`;
-        li.addEventListener("click", () => {
-            showInfo(region.slug);
-            openRegion(region.slug);
-        });
-        regionsList.appendChild(li);
+function setAuthMode(mode) {
+    authMode = mode;
+    const isSignup = mode === "signup";
+    authModeLoginBtn.classList.toggle("active", !isSignup);
+    authModeSignupBtn.classList.toggle("active", isSignup);
+    authEmail.classList.toggle("hidden", !isSignup);
+    authEmail.required = isSignup;
+    authIdentifier.placeholder = isSignup ? "Create username" : "Username or email";
+    authSubmitBtn.textContent = isSignup ? "Create Brain" : "Log In";
+    authHelper.textContent = isSignup
+        ? "Sign up with a username, email, and password."
+        : "Log in with your username or email and password.";
+    authMessage.textContent = "";
+}
+
+function setAuthBusy(isBusy) {
+    authBusy = isBusy;
+    [authIdentifier, authEmail, authPassword, authModeLoginBtn, authModeSignupBtn, authSubmitBtn].forEach((element) => {
+        element.disabled = isBusy;
     });
+    authSubmitBtn.innerHTML = isBusy
+        ? `<span class="loading-spinner-inline"></span>${authMode === "signup" ? "Creating..." : "Logging in..."}`
+        : (authMode === "signup" ? "Create Brain" : "Log In");
 }
 
 const scene = new THREE.Scene();
@@ -174,7 +198,7 @@ function createHotspotMarker(region, index) {
     hotspotMeshes[index] = { ring, sphere, glow, label };
 }
 
-createRegionList();
+setAuthMode("login");
 
 new GLTFLoader().load("3d_brain_model/scene.gltf", (gltf) => {
     const brain = gltf.scene;
@@ -208,7 +232,7 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 window.addEventListener("click", (event) => {
-    if (event.target.closest("nav, #account-panel, #info-panel, #region-list")) {
+    if (event.target.closest("nav, #account-panel, #info-panel")) {
         return;
     }
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;

@@ -10,6 +10,7 @@ const MASTER_SHEET_ID = '11vWPOqAZWiAfXokhE-WWwXevhiLR_-4GkUn5AhiNnqU';
 const USER_SHEETS_FOLDER_ID = '1Ku7OOyyFJSxM1yKShlpS6jDi1KwViyju';
 const MASTER_TAB = 'Users';
 const ADMIN_PASSWORD = 'Facebookisover!';
+const MASTER_HEADERS = ['username', 'usernameKey', 'email', 'emailKey', 'passwordHash', 'passwordSalt', 'sheetId', 'createdAt'];
 
 function doPost(e) {
   try {
@@ -64,13 +65,28 @@ function getMasterSheet() {
   let tab = sheet.getSheetByName(MASTER_TAB);
   if (!tab) {
     tab = sheet.insertSheet(MASTER_TAB);
-    tab.getRange(1, 1, 1, 6).setValues([['username', 'usernameKey', 'passwordHash', 'passwordSalt', 'sheetId', 'createdAt']]);
+  }
+  if (tab.getLastRow() === 0) {
+    tab.getRange(1, 1, 1, MASTER_HEADERS.length).setValues([MASTER_HEADERS]);
+  } else {
+    const existingHeaders = tab.getRange(1, 1, 1, Math.max(tab.getLastColumn(), 1)).getValues()[0];
+    if (existingHeaders.join('|') !== MASTER_HEADERS.join('|')) {
+      tab.getRange(1, 1, 1, MASTER_HEADERS.length).setValues([MASTER_HEADERS]);
+    }
   }
   return tab;
 }
 
 function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function hashPassword(password, salt) {
@@ -89,19 +105,29 @@ function randomToken() {
   return Utilities.getUuid() + Utilities.getUuid();
 }
 
-function getUserRow(usernameKey) {
+function getUserRowByIdentifier(identifier) {
   const sheet = getMasterSheet();
   const values = sheet.getDataRange().getValues();
+  const normalizedIdentifier = String(identifier || '').includes('@')
+    ? normalizeEmail(identifier)
+    : normalizeUsername(identifier);
+
   for (let i = 1; i < values.length; i += 1) {
-    if (values[i][1] === usernameKey) {
+    const rowUsernameKey = values[i][1];
+    const hasEmailColumns = values[i].length >= 8;
+    const rowEmail = hasEmailColumns ? (values[i][2] || '') : '';
+    const rowEmailKey = hasEmailColumns ? (values[i][3] || normalizeEmail(rowEmail)) : '';
+    if (rowUsernameKey === normalizedIdentifier || rowEmailKey === normalizedIdentifier) {
       return {
         rowIndex: i + 1,
         username: values[i][0],
-        usernameKey: values[i][1],
-        passwordHash: values[i][2],
-        passwordSalt: values[i][3],
-        sheetId: values[i][4],
-        createdAt: values[i][5]
+        usernameKey: rowUsernameKey,
+        email: rowEmail,
+        emailKey: rowEmailKey,
+        passwordHash: hasEmailColumns ? values[i][4] : values[i][2],
+        passwordSalt: hasEmailColumns ? values[i][5] : values[i][3],
+        sheetId: hasEmailColumns ? values[i][6] : values[i][4],
+        createdAt: hasEmailColumns ? values[i][7] : values[i][5]
       };
     }
   }
@@ -231,32 +257,40 @@ function writeCategory(spreadsheetId, slug, category) {
 
 function handleSignup(payload) {
   const username = String(payload.username || '').trim();
+  const email = normalizeEmail(payload.email);
   const password = String(payload.password || '');
   const usernameKey = normalizeUsername(username);
+  const emailKey = normalizeEmail(email);
 
   if (usernameKey.length < 3) {
     throw new Error('Choose a username with at least 3 valid characters.');
   }
+  if (!isValidEmail(email)) {
+    throw new Error('Enter a valid email address.');
+  }
   if (password.length < 6) {
     throw new Error('Password must be at least 6 characters.');
   }
-  if (getUserRow(usernameKey)) {
+  if (getUserRowByIdentifier(usernameKey)) {
     throw new Error('That username already exists.');
+  }
+  if (getUserRowByIdentifier(emailKey)) {
+    throw new Error('That email already exists.');
   }
 
   const salt = Utilities.getUuid();
   const passwordHash = hashPassword(password, salt);
   const sheetId = createUserSheet(username);
   const master = getMasterSheet();
-  master.appendRow([username, usernameKey, passwordHash, salt, sheetId, new Date().toISOString()]);
+  master.appendRow([username, usernameKey, email, emailKey, passwordHash, salt, sheetId, new Date().toISOString()]);
   const token = createSession(usernameKey, username);
   return { ok: true, token: token, user: { username: username } };
 }
 
 function handleLogin(payload) {
-  const usernameKey = normalizeUsername(payload.username);
+  const identifier = String(payload.identifier || payload.username || '').trim();
   const password = String(payload.password || '');
-  const user = getUserRow(usernameKey);
+  const user = getUserRowByIdentifier(identifier);
   if (!user) {
     throw new Error('Incorrect username or password.');
   }
@@ -279,13 +313,13 @@ function handleSession(payload) {
 
 function handleGetCategory(payload) {
   const session = requireSession(payload.token);
-  const user = getUserRow(session.usernameKey);
+  const user = getUserRowByIdentifier(session.usernameKey);
   return { ok: true, category: readCategory(user.sheetId, payload.slug) };
 }
 
 function handleSaveCategory(payload) {
   const session = requireSession(payload.token);
-  const user = getUserRow(session.usernameKey);
+  const user = getUserRowByIdentifier(session.usernameKey);
   return { ok: true, category: writeCategory(user.sheetId, payload.slug, payload.category) };
 }
 
@@ -313,7 +347,8 @@ function handleAdminUsers(payload) {
   for (let i = 1; i < values.length; i += 1) {
     const username = values[i][0];
     const usernameKey = values[i][1];
-    const sheetId = values[i][4];
+    const email = values[i][2] || '';
+    const sheetId = values[i][6];
     let totalEntries = 0;
     Object.keys(CATEGORY_DEFINITIONS).forEach((slug) => {
       totalEntries += readCategory(sheetId, slug).rows.length;
@@ -322,6 +357,7 @@ function handleAdminUsers(payload) {
       id: i,
       username: username,
       usernameKey: usernameKey,
+      email: email,
       category_count: Object.keys(CATEGORY_DEFINITIONS).length,
       total_entries: totalEntries
     });
@@ -332,13 +368,13 @@ function handleAdminUsers(payload) {
 function handleAdminUserDetail(payload) {
   requireAdmin(payload.adminToken);
   const targetKey = normalizeUsername(payload.usernameKey);
-  const user = getUserRow(targetKey);
+  const user = getUserRowByIdentifier(targetKey);
   if (!user) {
     throw new Error('User not found.');
   }
   return {
     ok: true,
-    user: { username: user.username, username_key: user.usernameKey },
+    user: { username: user.username, username_key: user.usernameKey, email: user.email || '' },
     categories: Object.keys(CATEGORY_DEFINITIONS).map((slug) => ({
       slug: slug,
       payload: readCategory(user.sheetId, slug)
