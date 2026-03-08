@@ -27,6 +27,7 @@ let authBusy = false;
 
 const routeUsernameKey = resolveRouteUsernameKey();
 const storedSessionUser = getStoredSessionUser();
+const initialHomeKey = routeUsernameKey || storedSessionUser?.usernameKey || "";
 
 document.body.dataset.hasSession = storedSessionUser?.usernameKey ? "true" : "false";
 
@@ -37,6 +38,8 @@ if (storedSessionUser) {
 if (routeUsernameKey && storedSessionUser?.usernameKey === routeUsernameKey) {
     viewedBrain = storedSessionUser;
 }
+
+applyInitialHomeLink();
 
 document.getElementById("close-btn").addEventListener("click", () => {
     infoPanel.style.display = "none";
@@ -109,6 +112,10 @@ function applyPageIdentity(brainUser) {
     const navHome = document.querySelector('nav a.logo');
     const homeHref = isPersonalBrain ? buildBrainPath(brainUser.usernameKey) : "/";
     navHome.href = homeHref;
+}
+
+function applyInitialHomeLink() {
+    document.querySelector("nav a.logo").href = buildBrainPath(initialHomeKey);
 }
 
 function renderRegionNav(isVisible) {

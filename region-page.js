@@ -28,6 +28,7 @@ const state = {
     viewedBrain: null
 };
 const storedSessionUser = getStoredSessionUser();
+const initialBrainKey = route.usernameKey || storedSessionUser?.usernameKey || "";
 
 if (storedSessionUser) {
     state.username = storedSessionUser.username;
@@ -42,6 +43,7 @@ if (!definition) {
     throw new Error("Unknown region");
 }
 
+applyInitialNestedLinks();
 applyPageIdentity();
 
 attachEvents();
@@ -423,6 +425,15 @@ function applyPageIdentity() {
         ? `Explore ${brainName}'s ${definition.name.toLowerCase()}`
         : definition.subtitle;
     document.querySelector("nav .logo").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
+}
+
+function applyInitialNestedLinks() {
+    const nestedHref = buildBrainPath(initialBrainKey);
+    document.querySelector("nav .logo").href = nestedHref;
+    const backLink = document.getElementById("back-to-brain-link");
+    if (backLink) {
+        backLink.href = nestedHref;
+    }
 }
 
 function resolveRoute() {
