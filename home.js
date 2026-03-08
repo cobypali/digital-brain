@@ -261,6 +261,24 @@ function createHotspotMarker(region, index) {
     labelDiv.className = "hotspot-label";
     labelDiv.textContent = definition.name;
     labelDiv.style.color = `#${definition.color.toString(16).padStart(6, "0")}`;
+    labelDiv.style.pointerEvents = "auto";
+    labelDiv.style.cursor = "pointer";
+    labelDiv.style.padding = "10px 14px";
+    labelDiv.style.borderRadius = "999px";
+    labelDiv.style.background = "rgba(11, 18, 32, 0.55)";
+    labelDiv.style.border = "1px solid rgba(96, 165, 250, 0.22)";
+    labelDiv.style.backdropFilter = "blur(6px)";
+    labelDiv.style.webkitTapHighlightColor = "transparent";
+    labelDiv.addEventListener("pointerup", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openRegion(region.slug);
+    });
+    labelDiv.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openRegion(region.slug);
+    });
     const label = new CSS2DObject(labelDiv);
     label.position.copy(position);
     label.position.y += 10;
