@@ -28,6 +28,8 @@ let authBusy = false;
 const routeUsernameKey = resolveRouteUsernameKey();
 const storedSessionUser = getStoredSessionUser();
 
+document.body.dataset.hasSession = storedSessionUser?.usernameKey ? "true" : "false";
+
 if (storedSessionUser) {
     activeUsername = storedSessionUser.username;
     activeUsernameKey = storedSessionUser.usernameKey;
