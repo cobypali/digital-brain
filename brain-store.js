@@ -1,4 +1,7 @@
 const SESSION_KEY = "digital_brain_session";
+const CACHE_TTL_MS = 15000;
+const PROFILE_CACHE_PREFIX = "digital_brain_profile:";
+const CATEGORY_CACHE_PREFIX = "digital_brain_category:";
 
 export const CATEGORY_DEFINITIONS = {
     books: {
@@ -67,6 +70,46 @@ function getSession() {
     }
 }
 
+function getCacheStore() {
+    return window.sessionStorage;
+}
+
+function readCache(key) {
+    try {
+        const raw = getCacheStore().getItem(key);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed.expiresAt || Date.now() > parsed.expiresAt) {
+            getCacheStore().removeItem(key);
+            return null;
+        }
+        return parsed.value;
+    } catch (error) {
+        return null;
+    }
+}
+
+function writeCache(key, value, ttlMs = CACHE_TTL_MS) {
+    try {
+        getCacheStore().setItem(key, JSON.stringify({
+            value,
+            expiresAt: Date.now() + ttlMs
+        }));
+    } catch (error) {
+        // Ignore storage failures.
+    }
+}
+
+function profileCacheKey(usernameKey) {
+    return `${PROFILE_CACHE_PREFIX}${normalizeUsernameKey(usernameKey)}`;
+}
+
+function categoryCacheKey(usernameKey, slug) {
+    return `${CATEGORY_CACHE_PREFIX}${normalizeUsernameKey(usernameKey || "self")}:${slug}`;
+}
+
 export function getStoredSessionUser() {
     const session = getSession();
     if (!session?.token || !session?.usernameKey) {
@@ -125,6 +168,7 @@ export async function getSessionUser() {
             return null;
         }
         setSession({ token: session.token, username: data.user.username, usernameKey: data.user.usernameKey });
+        writeCache(profileCacheKey(data.user.usernameKey), data.user);
         return data.user;
     } catch (error) {
         setSession(null);
@@ -145,12 +189,14 @@ export async function getSessionUsernameKey() {
 export async function signup(username, email, password) {
     const data = await request("signup", { username, email, password });
     setSession({ token: data.token, username: data.user.username, usernameKey: data.user.usernameKey });
+    writeCache(profileCacheKey(data.user.usernameKey), data.user);
     return data.user;
 }
 
 export async function login(identifier, password) {
     const data = await request("login", { identifier, password });
     setSession({ token: data.token, username: data.user.username, usernameKey: data.user.usernameKey });
+    writeCache(profileCacheKey(data.user.usernameKey), data.user);
     return data.user;
 }
 
@@ -171,17 +217,33 @@ export async function getCategory(slug) {
     if (!session?.token) {
         throw new Error("You must be signed in.");
     }
+    const cached = readCache(categoryCacheKey(session.usernameKey, slug));
+    if (cached) {
+        return cached;
+    }
     const data = await request("getCategory", { token: session.token, slug });
+    writeCache(categoryCacheKey(session.usernameKey, slug), data.category);
     return data.category;
 }
 
 export async function getPublicBrain(usernameKey) {
+    const cached = readCache(profileCacheKey(usernameKey));
+    if (cached) {
+        return cached;
+    }
     const data = await request("publicProfile", { usernameKey: normalizeUsernameKey(usernameKey) });
+    writeCache(profileCacheKey(data.user.usernameKey), data.user);
     return data.user;
 }
 
 export async function getPublicCategory(usernameKey, slug) {
-    const data = await request("publicCategory", { usernameKey: normalizeUsernameKey(usernameKey), slug });
+    const normalizedUsernameKey = normalizeUsernameKey(usernameKey);
+    const cached = readCache(categoryCacheKey(normalizedUsernameKey, slug));
+    if (cached) {
+        return cached;
+    }
+    const data = await request("publicCategory", { usernameKey: normalizedUsernameKey, slug });
+    writeCache(categoryCacheKey(normalizedUsernameKey, slug), data.category);
     return data.category;
 }
 
@@ -199,7 +261,87 @@ export async function saveCategory(slug, categoryData) {
         throw new Error("You must be signed in.");
     }
     const data = await request("saveCategory", { token: session.token, slug, category: categoryData });
+    writeCache(categoryCacheKey(session.usernameKey, slug), data.category);
     return data.category;
+}
+
+export async function bootstrapHome(usernameKey = "") {
+    const session = getSession();
+    const payload = {
+        token: session?.token ?? "",
+        usernameKey: normalizeUsernameKey(usernameKey)
+    };
+    const data = await request("bootstrapHome", payload);
+    if (data.sessionUser) {
+        setSession({ token: session?.token ?? "", username: data.sessionUser.username, usernameKey: data.sessionUser.usernameKey });
+        writeCache(profileCacheKey(data.sessionUser.usernameKey), data.sessionUser);
+    } else if (session?.token) {
+        setSession(null);
+    }
+    if (data.viewedBrain) {
+        writeCache(profileCacheKey(data.viewedBrain.usernameKey), data.viewedBrain);
+    }
+    return data;
+}
+
+export async function bootstrapRegion(slug, usernameKey = "") {
+    const session = getSession();
+    const normalizedUsernameKey = normalizeUsernameKey(usernameKey);
+    const cachedProfile = normalizedUsernameKey ? readCache(profileCacheKey(normalizedUsernameKey)) : null;
+    const cachedCategory = readCache(categoryCacheKey(normalizedUsernameKey || session?.usernameKey || "self", slug));
+
+    if (cachedCategory && (normalizedUsernameKey ? cachedProfile : getStoredSessionUser())) {
+        return {
+            sessionUser: getStoredSessionUser(),
+            viewedBrain: normalizedUsernameKey ? cachedProfile : getStoredSessionUser(),
+            category: cachedCategory,
+            fromCache: true
+        };
+    }
+
+    const data = await request("bootstrapRegion", {
+        token: session?.token ?? "",
+        slug,
+        usernameKey: normalizedUsernameKey
+    });
+
+    if (data.sessionUser) {
+        setSession({ token: session?.token ?? "", username: data.sessionUser.username, usernameKey: data.sessionUser.usernameKey });
+        writeCache(profileCacheKey(data.sessionUser.usernameKey), data.sessionUser);
+    } else if (session?.token) {
+        setSession(null);
+    }
+    if (data.viewedBrain) {
+        writeCache(profileCacheKey(data.viewedBrain.usernameKey), data.viewedBrain);
+    }
+    if (data.category) {
+        const ownerKey = data.viewedBrain?.usernameKey || data.sessionUser?.usernameKey || normalizedUsernameKey;
+        if (ownerKey) {
+            writeCache(categoryCacheKey(ownerKey, slug), data.category);
+        }
+    }
+    return data;
+}
+
+export async function preloadBrainCategories(usernameKey = "") {
+    const session = getSession();
+    const normalizedUsernameKey = normalizeUsernameKey(usernameKey);
+    const data = await request("bootstrapCategories", {
+        token: session?.token ?? "",
+        usernameKey: normalizedUsernameKey
+    });
+    if (data.viewedBrain) {
+        writeCache(profileCacheKey(data.viewedBrain.usernameKey), data.viewedBrain);
+    }
+    if (Array.isArray(data.categories)) {
+        const ownerKey = data.viewedBrain?.usernameKey || data.sessionUser?.usernameKey || normalizedUsernameKey;
+        if (ownerKey) {
+            data.categories.forEach((category) => {
+                writeCache(categoryCacheKey(ownerKey, category.slug), category);
+            });
+        }
+    }
+    return data.categories ?? [];
 }
 
 export function createEmptyRow(slug) {

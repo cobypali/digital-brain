@@ -1,14 +1,15 @@
 import {
+    bootstrapRegion,
     buildBrainPath,
     CATEGORY_DEFINITIONS,
     createEmptyRow,
     getCategory,
-    getPublicBrain,
     getPublicCategory,
     getSessionUser,
     getStoredSessionUser,
     login,
     normalizeUsernameKey,
+    preloadBrainCategories,
     saveCategory,
     signup
 } from "./brain-store.js";
@@ -46,14 +47,38 @@ renderRegionNav();
 initialize();
 
 async function initialize() {
-    const routeReady = await initializeRouteState();
-    if (!routeReady) {
+    try {
+        const bootstrap = await bootstrapRegion(slug, route.usernameKey);
+        state.username = bootstrap.sessionUser?.username ?? state.username;
+        state.usernameKey = bootstrap.sessionUser?.usernameKey ?? state.usernameKey;
+        state.viewedBrain = bootstrap.viewedBrain ?? state.viewedBrain;
+
+        if (route.usernameKey && !state.viewedBrain) {
+            document.getElementById("content").innerHTML = `<div class="error"><p>Brain not found.</p></div>`;
+            document.getElementById("edit-toggle-btn").style.display = "none";
+            document.getElementById("editor-toolbar").style.display = "none";
+            return;
+        }
+
+        if (state.viewedBrain?.usernameKey && window.location.search.includes("brain=")) {
+            window.history.replaceState({}, "", buildBrainPath(state.viewedBrain.usernameKey, slug));
+        }
+
+        await syncSessionUi(bootstrap.sessionUser);
+        if (bootstrap.category) {
+            state.category = bootstrap.category;
+            renderPageFromState();
+        } else {
+            await renderPage();
+        }
+
+        const preloadKey = state.viewedBrain?.usernameKey || state.usernameKey || "";
+        if (preloadKey) {
+            preloadBrainCategories(preloadKey).catch(() => {});
+        }
+    } finally {
         document.body.dataset.appReady = "true";
-        return;
     }
-    await syncSessionUi();
-    await renderPage();
-    document.body.dataset.appReady = "true";
 }
 
 function attachEvents() {
@@ -149,10 +174,10 @@ function renderRegionNav() {
     document.getElementById("back-to-brain-link").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
 }
 
-async function syncSessionUi() {
-    const user = await getSessionUser();
-    state.username = user?.username ?? null;
-    state.usernameKey = user?.usernameKey ?? null;
+async function syncSessionUi(user = null) {
+    const resolvedUser = user || await getSessionUser();
+    state.username = resolvedUser?.username ?? null;
+    state.usernameKey = resolvedUser?.usernameKey ?? null;
 
     const ownsViewedBrain = !state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey;
     const canEdit = Boolean(state.usernameKey) && ownsViewedBrain;
@@ -173,6 +198,10 @@ async function renderPage() {
         state.category = { slug, name: definition.name, columns: [...definition.columns], rows: [] };
     }
 
+    renderPageFromState();
+}
+
+function renderPageFromState() {
     const ownerName = state.viewedBrain?.username || state.username;
     const canEdit = Boolean(state.usernameKey) && (!state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey);
     document.getElementById("item-count").textContent = ownerName
@@ -341,26 +370,6 @@ function resolveRoute() {
         usernameKey: queryBrain || "",
         slug: explicitSlug || "movies"
     };
-}
-
-async function initializeRouteState() {
-    if (!route.usernameKey) {
-        return true;
-    }
-    try {
-        state.viewedBrain = await getPublicBrain(route.usernameKey);
-        renderRegionNav();
-        applyPageIdentity();
-        if (window.location.search.includes("brain=")) {
-            window.history.replaceState({}, "", buildBrainPath(state.viewedBrain.usernameKey, slug));
-        }
-        return true;
-    } catch (error) {
-        document.getElementById("content").innerHTML = `<div class="error"><p>${escapeHtml(error.message)}</p></div>`;
-        document.getElementById("edit-toggle-btn").style.display = "none";
-        document.getElementById("editor-toolbar").style.display = "none";
-        return false;
-    }
 }
 
 function escapeHtml(value) {

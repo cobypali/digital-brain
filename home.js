@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
-import { buildBrainPath, CATEGORY_DEFINITIONS, getPublicBrain, getSessionUser, getStoredSessionUser, HOME_REGIONS, login, logout, signup } from "./brain-store.js";
+import { bootstrapHome, buildBrainPath, CATEGORY_DEFINITIONS, getSessionUser, getStoredSessionUser, HOME_REGIONS, login, logout, preloadBrainCategories, signup } from "./brain-store.js";
 
 const authMessage = document.getElementById("auth-message");
 const authForms = document.getElementById("auth-forms");
@@ -87,34 +87,15 @@ document.getElementById("logout-btn").addEventListener("click", () => {
     });
 });
 
-async function syncAuthUi() {
-    const sessionUser = await getSessionUser();
-    activeUsername = sessionUser?.username ?? null;
-    activeUsernameKey = sessionUser?.usernameKey ?? null;
+async function syncAuthUi(sessionUser = null) {
+    const resolvedUser = sessionUser || await getSessionUser();
+    activeUsername = resolvedUser?.username ?? null;
+    activeUsernameKey = resolvedUser?.usernameKey ?? null;
     const loggedIn = Boolean(activeUsernameKey);
     authForms.style.display = loggedIn ? "none" : "grid";
     sessionView.style.display = loggedIn ? "block" : "none";
     sessionUsername.textContent = loggedIn ? `${activeUsername}'s brain is active` : "";
     renderRegionNav(loggedIn);
-}
-
-async function syncViewedBrain() {
-    viewedBrain = null;
-    if (!routeUsernameKey) {
-        applyPageIdentity(null);
-        return;
-    }
-
-    try {
-        viewedBrain = await getPublicBrain(routeUsernameKey);
-        applyPageIdentity(viewedBrain);
-        if (window.location.search.includes("brain=")) {
-            window.history.replaceState({}, "", buildBrainPath(viewedBrain.usernameKey));
-        }
-    } catch (error) {
-        authMessage.textContent = error.message;
-        applyPageIdentity({ username: routeUsernameKey, usernameKey: routeUsernameKey });
-    }
 }
 
 function applyPageIdentity(brainUser) {
@@ -369,7 +350,20 @@ animate();
 
 async function initializePage() {
     try {
-        await syncViewedBrain();
+        const bootstrap = await bootstrapHome(routeUsernameKey);
+        viewedBrain = bootstrap.viewedBrain ?? (routeUsernameKey ? { username: routeUsernameKey, usernameKey: routeUsernameKey } : null);
+        applyPageIdentity(viewedBrain);
+        await syncAuthUi(bootstrap.sessionUser);
+        if (viewedBrain?.usernameKey && window.location.search.includes("brain=")) {
+            window.history.replaceState({}, "", buildBrainPath(viewedBrain.usernameKey));
+        }
+        const preloadKey = viewedBrain?.usernameKey || bootstrap.sessionUser?.usernameKey || "";
+        if (preloadKey) {
+            preloadBrainCategories(preloadKey).catch(() => {});
+        }
+    } catch (error) {
+        authMessage.textContent = error.message;
+        applyPageIdentity(viewedBrain);
         await syncAuthUi();
     } finally {
         document.body.dataset.appReady = "true";

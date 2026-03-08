@@ -34,6 +34,12 @@ function doPost(e) {
         return jsonResponse(handleLogout(payload));
       case 'session':
         return jsonResponse(handleSession(payload));
+      case 'bootstrapHome':
+        return jsonResponse(handleBootstrapHome(payload));
+      case 'bootstrapRegion':
+        return jsonResponse(handleBootstrapRegion(payload));
+      case 'bootstrapCategories':
+        return jsonResponse(handleBootstrapCategories(payload));
       case 'getCategory':
         return jsonResponse(handleGetCategory(payload));
       case 'saveCategory':
@@ -339,6 +345,62 @@ function handleLogout(payload) {
 function handleSession(payload) {
   const session = getSession(payload.token);
   return { ok: true, user: session ? { username: session.username, usernameKey: session.usernameKey } : null };
+}
+
+function sessionUserPayload(token) {
+  const session = getSession(token);
+  return session ? { username: session.username, usernameKey: session.usernameKey } : null;
+}
+
+function publicUserPayload(user) {
+  return user ? { username: user.username, usernameKey: user.usernameKey } : null;
+}
+
+function resolveViewedUser(token, usernameKey) {
+  const normalizedUsernameKey = normalizeUsername(usernameKey);
+  if (normalizedUsernameKey) {
+    return getUserRowByIdentifier(normalizedUsernameKey);
+  }
+  const session = getSession(token);
+  return session ? getUserRowByIdentifier(session.usernameKey) : null;
+}
+
+function handleBootstrapHome(payload) {
+  const sessionUser = sessionUserPayload(payload.token);
+  const viewedUser = payload.usernameKey ? resolveViewedUser(payload.token, payload.usernameKey) : null;
+  return {
+    ok: true,
+    sessionUser: sessionUser,
+    viewedBrain: publicUserPayload(viewedUser)
+  };
+}
+
+function handleBootstrapRegion(payload) {
+  const sessionUser = sessionUserPayload(payload.token);
+  const viewedUser = resolveViewedUser(payload.token, payload.usernameKey);
+  const categoryOwner = viewedUser || (sessionUser ? getUserRowByIdentifier(sessionUser.usernameKey) : null);
+
+  return {
+    ok: true,
+    sessionUser: sessionUser,
+    viewedBrain: publicUserPayload(categoryOwner),
+    category: categoryOwner ? readCategory(categoryOwner.sheetId, payload.slug) : null
+  };
+}
+
+function handleBootstrapCategories(payload) {
+  const sessionUser = sessionUserPayload(payload.token);
+  const viewedUser = resolveViewedUser(payload.token, payload.usernameKey);
+  const categoryOwner = viewedUser || (sessionUser ? getUserRowByIdentifier(sessionUser.usernameKey) : null);
+
+  return {
+    ok: true,
+    sessionUser: sessionUser,
+    viewedBrain: publicUserPayload(categoryOwner),
+    categories: categoryOwner ? Object.keys(CATEGORY_DEFINITIONS).map(function(slug) {
+      return readCategory(categoryOwner.sheetId, slug);
+    }) : []
+  };
 }
 
 function handleGetCategory(payload) {
