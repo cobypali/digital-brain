@@ -84,6 +84,15 @@
             color: #E6EDF7; font-size: 32px; font-weight: 700; letter-spacing: 4px; text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); margin-bottom: 8px;
         }
         #page-subtitle { color: #60A5FA; font-size: 16px; font-weight: 300; }
+        #brain-regions-nav {
+            position: fixed; top: 80px; right: 20px; background: #121A2B; backdrop-filter: blur(20px); padding: 20px; border-radius: 16px;
+            color: #E6EDF7; border: 1px solid #1A2438; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); z-index: 50; display: none;
+        }
+        #brain-regions-nav h3 { margin-bottom: 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: rgba(230, 237, 247, 0.5); }
+        #brain-regions-nav ul { list-style: none; }
+        #brain-regions-nav li a { padding: 8px 12px; border-radius: 8px; transition: background 0.2s; font-size: 14px; display: flex; align-items: center; gap: 10px; color: #E6EDF7; text-decoration: none; }
+        #brain-regions-nav li a:hover, #brain-regions-nav li a.active { background: rgba(59, 130, 246, 0.2); }
+        #brain-regions-nav .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .hotspot-label {
             color: #E6EDF7; font-size: 12px; font-weight: 600; text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 0 3px rgba(0,0,0,1);
             white-space: nowrap; pointer-events: none;
@@ -108,9 +117,6 @@
 <body>
     <nav>
         <a href="/" class="logo">DIGITAL BRAIN</a>
-        <div class="nav-links">
-            <a href="/" class="active">Home</a>
-        </div>
     </nav>
 
     <div id="canvas-container"></div>
@@ -122,6 +128,11 @@
     <div id="page-header">
         <h1 id="page-title">DIGITAL BRAIN</h1>
         <p id="page-subtitle">Explore a digitized map of your own brain</p>
+    </div>
+
+    <div id="brain-regions-nav">
+        <h3>Brain Regions</h3>
+        <ul id="region-links"></ul>
     </div>
 
     <div id="info-panel">

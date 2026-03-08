@@ -323,7 +323,6 @@ function applyPageIdentity() {
         ? `Explore ${brainName}'s ${definition.name.toLowerCase()}`
         : definition.subtitle;
     document.querySelector("nav .logo").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
-    document.querySelector("nav .nav-links a").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
 }
 
 function resolveRoute() {

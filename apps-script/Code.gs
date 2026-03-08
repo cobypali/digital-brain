@@ -11,6 +11,14 @@ const USER_SHEETS_FOLDER_ID = '1Ku7OOyyFJSxM1yKShlpS6jDi1KwViyju';
 const MASTER_TAB = 'Users';
 const ADMIN_PASSWORD = 'Facebookisover!';
 const MASTER_HEADERS = ['username', 'usernameKey', 'email', 'emailKey', 'passwordHash', 'passwordSalt', 'sheetId', 'createdAt'];
+const USER_CACHE_TTL_SECONDS = 120;
+const SAMPLE_ROWS = {
+  books: { Title: 'Sample Book', Author: 'Sample Author', Status: 'Reading', Rating: '5', Notes: 'Sample entry. Replace this with your own book notes.' },
+  movies: { Title: 'Sample Movie', Director: 'Sample Director', Year: '2026', Rating: '5', Notes: 'Sample entry. Replace this with your own movie notes.' },
+  music: { Title: 'Sample Song', Artist: 'Sample Artist', Type: 'Album', Rating: '5', Notes: 'Sample entry. Replace this with your own music notes.' },
+  thoughts: { Title: 'Sample Thought', Tag: 'Sample', Date: '2026-03-08', Status: 'Draft', Notes: 'Sample entry. Replace this with your own thought.' },
+  tv: { Title: 'Sample Show', Season: '1', Status: 'Watching', Rating: '5', Notes: 'Sample entry. Replace this with your own TV notes.' }
+};
 
 function doPost(e) {
   try {
@@ -110,11 +118,17 @@ function randomToken() {
 }
 
 function getUserRowByIdentifier(identifier) {
-  const sheet = getMasterSheet();
-  const values = sheet.getDataRange().getValues();
   const normalizedIdentifier = String(identifier || '').includes('@')
     ? normalizeEmail(identifier)
     : normalizeUsername(identifier);
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('user:' + normalizedIdentifier);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const sheet = getMasterSheet();
+  const values = sheet.getDataRange().getValues();
 
   for (let i = 1; i < values.length; i += 1) {
     const rowUsernameKey = values[i][1];
@@ -122,7 +136,7 @@ function getUserRowByIdentifier(identifier) {
     const rowEmail = hasEmailColumns ? (values[i][2] || '') : '';
     const rowEmailKey = hasEmailColumns ? (values[i][3] || normalizeEmail(rowEmail)) : '';
     if (rowUsernameKey === normalizedIdentifier || rowEmailKey === normalizedIdentifier) {
-      return {
+      const user = {
         rowIndex: i + 1,
         username: values[i][0],
         usernameKey: rowUsernameKey,
@@ -133,6 +147,11 @@ function getUserRowByIdentifier(identifier) {
         sheetId: hasEmailColumns ? values[i][6] : values[i][4],
         createdAt: hasEmailColumns ? values[i][7] : values[i][5]
       };
+      cache.put('user:' + user.usernameKey, JSON.stringify(user), USER_CACHE_TTL_SECONDS);
+      if (user.emailKey) {
+        cache.put('user:' + user.emailKey, JSON.stringify(user), USER_CACHE_TTL_SECONDS);
+      }
+      return user;
     }
   }
   return null;
@@ -147,6 +166,9 @@ function createUserSheet(username) {
     const sheet = index === 0 ? defaultSheet : spreadsheet.insertSheet();
     sheet.setName(definition.name);
     sheet.getRange(1, 1, 1, definition.columns.length + 1).setValues([['id'].concat(definition.columns)]);
+    const sampleValues = SAMPLE_ROWS[slug] || {};
+    const sampleRow = [Utilities.getUuid()].concat(definition.columns.map((column) => sampleValues[column] || ''));
+    sheet.getRange(2, 1, 1, definition.columns.length + 1).setValues([sampleRow]);
   });
 
   const file = DriveApp.getFileById(spreadsheet.getId());
@@ -287,6 +309,10 @@ function handleSignup(payload) {
   const sheetId = createUserSheet(username);
   const master = getMasterSheet();
   master.appendRow([username, usernameKey, email, emailKey, passwordHash, salt, sheetId, new Date().toISOString()]);
+  const user = { rowIndex: master.getLastRow(), username: username, usernameKey: usernameKey, email: email, emailKey: emailKey, passwordHash: passwordHash, passwordSalt: salt, sheetId: sheetId, createdAt: new Date().toISOString() };
+  const cache = CacheService.getScriptCache();
+  cache.put('user:' + usernameKey, JSON.stringify(user), USER_CACHE_TTL_SECONDS);
+  cache.put('user:' + emailKey, JSON.stringify(user), USER_CACHE_TTL_SECONDS);
   const token = createSession(usernameKey, username);
   return { ok: true, token: token, user: { username: username, usernameKey: usernameKey } };
 }

@@ -17,6 +17,8 @@ const authSubmitBtn = document.getElementById("auth-submit-btn");
 const authHelper = document.getElementById("auth-helper");
 const authModeLoginBtn = document.getElementById("auth-mode-login");
 const authModeSignupBtn = document.getElementById("auth-mode-signup");
+const regionsNav = document.getElementById("brain-regions-nav");
+const regionLinks = document.getElementById("region-links");
 let activeUsername = null;
 let activeUsernameKey = null;
 let viewedBrain = null;
@@ -82,6 +84,7 @@ async function syncAuthUi() {
     authForms.style.display = loggedIn ? "none" : "grid";
     sessionView.style.display = loggedIn ? "block" : "none";
     sessionUsername.textContent = loggedIn ? `${activeUsername}'s brain is active` : "";
+    renderRegionNav(loggedIn);
 }
 
 async function syncViewedBrain() {
@@ -112,10 +115,25 @@ function applyPageIdentity(brainUser) {
     document.getElementById("page-title").textContent = title;
     document.getElementById("page-subtitle").textContent = subtitle;
     const navHome = document.querySelector('nav a.logo');
-    const navLink = document.querySelector('nav .nav-links a');
     const homeHref = isPersonalBrain ? buildBrainPath(brainUser.usernameKey) : "/";
     navHome.href = homeHref;
-    navLink.href = homeHref;
+}
+
+function renderRegionNav(isVisible) {
+    if (!regionsNav) {
+        return;
+    }
+    if (!isVisible) {
+        regionsNav.style.display = "none";
+        regionLinks.innerHTML = "";
+        return;
+    }
+
+    const targetUsernameKey = viewedBrain?.usernameKey || activeUsernameKey || "";
+    regionLinks.innerHTML = Object.entries(CATEGORY_DEFINITIONS).map(([slug, item]) => `
+        <li><a href="${buildBrainPath(targetUsernameKey, slug)}"><span class="dot" style="background: #${item.color.toString(16).padStart(6, "0")}"></span>${item.name}</a></li>
+    `).join("");
+    regionsNav.style.display = "block";
 }
 
 function showInfo(slug) {
