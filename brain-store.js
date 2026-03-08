@@ -67,6 +67,17 @@ function getSession() {
     }
 }
 
+export function getStoredSessionUser() {
+    const session = getSession();
+    if (!session?.token || !session?.usernameKey) {
+        return null;
+    }
+    return {
+        username: session.username ?? null,
+        usernameKey: session.usernameKey
+    };
+}
+
 function setSession(session) {
     if (!session) {
         localStorage.removeItem(SESSION_KEY);

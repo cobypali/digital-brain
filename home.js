@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
-import { buildBrainPath, CATEGORY_DEFINITIONS, getPublicBrain, getSessionUser, HOME_REGIONS, login, logout, signup } from "./brain-store.js";
+import { buildBrainPath, CATEGORY_DEFINITIONS, getPublicBrain, getSessionUser, getStoredSessionUser, HOME_REGIONS, login, logout, signup } from "./brain-store.js";
 
 const authMessage = document.getElementById("auth-message");
 const authForms = document.getElementById("auth-forms");
@@ -26,6 +26,15 @@ let authMode = "login";
 let authBusy = false;
 
 const routeUsernameKey = resolveRouteUsernameKey();
+const storedSessionUser = getStoredSessionUser();
+
+if (storedSessionUser) {
+    activeUsername = storedSessionUser.username;
+    activeUsernameKey = storedSessionUser.usernameKey;
+}
+if (routeUsernameKey && storedSessionUser?.usernameKey === routeUsernameKey) {
+    viewedBrain = storedSessionUser;
+}
 
 document.getElementById("close-btn").addEventListener("click", () => {
     infoPanel.style.display = "none";
@@ -269,6 +278,8 @@ function createHotspotMarker(region, index) {
 }
 
 setAuthMode("login");
+applyPageIdentity(viewedBrain);
+renderRegionNav(Boolean(activeUsernameKey));
 
 syncViewedBrain();
 

@@ -6,8 +6,8 @@ import {
     getPublicBrain,
     getPublicCategory,
     getSessionUser,
+    getStoredSessionUser,
     login,
-    logout,
     normalizeUsernameKey,
     saveCategory,
     signup
@@ -24,6 +24,15 @@ const state = {
     usernameKey: null,
     viewedBrain: null
 };
+const storedSessionUser = getStoredSessionUser();
+
+if (storedSessionUser) {
+    state.username = storedSessionUser.username;
+    state.usernameKey = storedSessionUser.usernameKey;
+}
+if (route.usernameKey && storedSessionUser?.usernameKey === route.usernameKey) {
+    state.viewedBrain = storedSessionUser;
+}
 
 if (!definition) {
     document.body.innerHTML = "<main style='padding:40px;color:#E6EDF7'>Unknown region.</main>";
