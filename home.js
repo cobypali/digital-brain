@@ -199,7 +199,7 @@ new GLTFLoader().load("3d_brain_model/scene.gltf", (gltf) => {
     HOME_REGIONS.forEach(createHotspotMarker);
     document.getElementById("loading").style.display = "none";
 }, undefined, () => {
-    document.getElementById("loading").innerHTML = "<div>Failed to load brain model locally. Use start-local.bat to run the site over localhost.</div>";
+    document.getElementById("loading").innerHTML = "<div>Failed to load brain model.</div>";
 });
 
 const raycaster = new THREE.Raycaster();

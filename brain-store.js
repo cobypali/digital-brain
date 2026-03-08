@@ -1,3 +1,5 @@
+const SESSION_KEY = "digital_brain_session";
+
 export const CATEGORY_DEFINITIONS = {
     books: {
         name: "Books",
@@ -49,27 +51,61 @@ export const HOME_REGIONS = [
     { slug: "tv", position: [24.72, -6.84, 58.32] }
 ];
 
-async function request(path, options = {}) {
-    const response = await fetch(path, {
-        credentials: "same-origin",
-        headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {})
-        },
-        ...options
-    });
+function getAppsScriptUrl() {
+    const url = window.DIGITAL_BRAIN_CONFIG?.appsScriptUrl;
+    if (!url) {
+        throw new Error("Missing Apps Script URL. Set it in config.js.");
+    }
+    return url;
+}
 
+function getSession() {
+    try {
+        return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    } catch (error) {
+        return null;
+    }
+}
+
+function setSession(session) {
+    if (!session) {
+        localStorage.removeItem(SESSION_KEY);
+        return;
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+async function request(action, payload = {}) {
+    const response = await fetch(getAppsScriptUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action, ...payload })
+    });
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
-    if (!response.ok) {
+    if (!response.ok || data.ok === false) {
         throw new Error(data.error || "Request failed.");
     }
     return data;
 }
 
 export async function getSessionUser() {
-    const data = await request("/api/session", { method: "GET" });
-    return data.user;
+    const session = getSession();
+    if (!session?.token) {
+        return null;
+    }
+    try {
+        const data = await request("session", { token: session.token });
+        if (!data.user) {
+            setSession(null);
+            return null;
+        }
+        setSession({ token: session.token, username: data.user.username });
+        return data.user;
+    } catch (error) {
+        setSession(null);
+        return null;
+    }
 }
 
 export async function getSessionUsername() {
@@ -78,40 +114,44 @@ export async function getSessionUsername() {
 }
 
 export async function signup(username, password) {
-    const data = await request("/api/signup", {
-        method: "POST",
-        body: JSON.stringify({ username, password })
-    });
+    const data = await request("signup", { username, password });
+    setSession({ token: data.token, username: data.user.username });
     return data.user;
 }
 
 export async function login(username, password) {
-    const data = await request("/api/login", {
-        method: "POST",
-        body: JSON.stringify({ username, password })
-    });
-    return data.user;
-}
-
-export async function loginDemo() {
-    const data = await request("/api/demo-login", { method: "POST", body: "{}" });
+    const data = await request("login", { username, password });
+    setSession({ token: data.token, username: data.user.username });
     return data.user;
 }
 
 export async function logout() {
-    await request("/api/logout", { method: "POST", body: "{}" });
+    const session = getSession();
+    if (session?.token) {
+        try {
+            await request("logout", { token: session.token });
+        } catch (error) {
+            // Ignore remote logout failures and clear local session anyway.
+        }
+    }
+    setSession(null);
 }
 
 export async function getCategory(slug) {
-    const data = await request(`/api/category/${slug}`, { method: "GET" });
+    const session = getSession();
+    if (!session?.token) {
+        throw new Error("You must be signed in.");
+    }
+    const data = await request("getCategory", { token: session.token, slug });
     return data.category;
 }
 
 export async function saveCategory(slug, categoryData) {
-    const data = await request(`/api/category/${slug}`, {
-        method: "PUT",
-        body: JSON.stringify({ category: categoryData })
-    });
+    const session = getSession();
+    if (!session?.token) {
+        throw new Error("You must be signed in.");
+    }
+    const data = await request("saveCategory", { token: session.token, slug, category: categoryData });
     return data.category;
 }
 
