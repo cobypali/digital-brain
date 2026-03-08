@@ -76,6 +76,7 @@ async function initialize() {
         if (preloadKey) {
             preloadBrainCategories(preloadKey).catch(() => {});
         }
+        preloadHomeAssets();
     } finally {
         document.body.dataset.appReady = "true";
     }
@@ -380,4 +381,23 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
     return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function preloadHomeAssets() {
+    const urls = [
+        "/",
+        "/3d_brain_model/scene.gltf",
+        "/3d_brain_model/scene.bin"
+    ];
+
+    urls.forEach((url) => {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.href = url;
+        if (url.endsWith(".gltf")) {
+            link.as = "fetch";
+            link.crossOrigin = "anonymous";
+        }
+        document.head.appendChild(link);
+    });
 }
