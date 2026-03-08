@@ -281,7 +281,7 @@ setAuthMode("login");
 applyPageIdentity(viewedBrain);
 renderRegionNav(Boolean(activeUsernameKey));
 
-syncViewedBrain();
+initializePage();
 
 new GLTFLoader().load("3d_brain_model/scene.gltf", (gltf) => {
     const brain = gltf.scene;
@@ -363,8 +363,16 @@ window.addEventListener("resize", () => {
     updateCameraForScreenSize();
 });
 
-syncAuthUi();
 animate();
+
+async function initializePage() {
+    try {
+        await syncViewedBrain();
+        await syncAuthUi();
+    } finally {
+        document.body.dataset.appReady = "true";
+    }
+}
 
 function resolveRouteUsernameKey() {
     const params = new URLSearchParams(window.location.search);

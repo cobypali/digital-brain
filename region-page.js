@@ -48,10 +48,12 @@ initialize();
 async function initialize() {
     const routeReady = await initializeRouteState();
     if (!routeReady) {
+        document.body.dataset.appReady = "true";
         return;
     }
     await syncSessionUi();
     await renderPage();
+    document.body.dataset.appReady = "true";
 }
 
 function attachEvents() {

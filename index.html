@@ -16,6 +16,12 @@
         body { overflow: hidden; }
         nav { z-index: 1000; }
         #canvas-container { width: 100vw; height: 100vh; }
+        body[data-app-ready="false"] #page-header,
+        body[data-app-ready="false"] #info-panel,
+        body[data-app-ready="false"] #account-panel,
+        body[data-app-ready="false"] #brain-regions-nav {
+            display: none !important;
+        }
         #info-panel, #account-panel {
             position: fixed;
             background: #121A2B;
@@ -114,7 +120,7 @@
         }
     </style>
 </head>
-<body>
+<body data-app-ready="false">
     <nav>
         <a href="/" class="logo">DIGITAL BRAIN</a>
     </nav>
