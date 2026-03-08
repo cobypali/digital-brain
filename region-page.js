@@ -56,13 +56,6 @@ function attachEvents() {
         await renderPage();
     });
 
-    document.getElementById("logout-btn").addEventListener("click", async () => {
-        await logout();
-        state.editing = false;
-        await syncSessionUi();
-        await renderPage();
-    });
-
     document.getElementById("modal-close").addEventListener("click", closeDetailModal);
     document.getElementById("detail-modal-overlay").addEventListener("click", (event) => {
         if (event.target === event.currentTarget) {
@@ -152,13 +145,6 @@ async function syncSessionUi() {
 
     const ownsViewedBrain = !state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey;
     const canEdit = Boolean(state.usernameKey) && ownsViewedBrain;
-    const ownerName = state.viewedBrain?.username || state.username;
-    const status = ownerName
-        ? (canEdit ? `${ownerName}'s brain is active` : `Exploring ${ownerName}'s brain`)
-        : "Sign in to edit this sheet";
-
-    document.getElementById("session-status").textContent = status;
-    document.getElementById("logout-btn").style.display = state.username ? "inline-flex" : "none";
     document.getElementById("edit-toggle-btn").textContent = canEdit ? (state.editing ? "Done Editing" : "Edit Sheet") : (state.username ? "Viewing Only" : "Sign In");
     document.getElementById("edit-toggle-btn").disabled = state.username ? !canEdit : false;
     applyPageIdentity();
@@ -360,7 +346,6 @@ async function initializeRouteState() {
         return true;
     } catch (error) {
         document.getElementById("content").innerHTML = `<div class="error"><p>${escapeHtml(error.message)}</p></div>`;
-        document.getElementById("session-status").textContent = "Brain not found";
         document.getElementById("edit-toggle-btn").style.display = "none";
         document.getElementById("editor-toolbar").style.display = "none";
         return false;

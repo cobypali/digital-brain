@@ -21,7 +21,7 @@
         .page-title-wrap { flex: 1; }
         .item-count { text-align: right; font-size: 13px; color: rgba(230, 237, 247, 0.5); margin-bottom: 16px; }
         .session-toolbar, #editor-toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 18px; }
-        .session-pill, .toolbar-btn, .table-action {
+        .toolbar-btn, .table-action {
             background: rgba(18, 26, 43, 0.85); border: 1px solid #1A2438; color: #E6EDF7; padding: 10px 14px; border-radius: 10px; font-size: 13px;
         }
         .toolbar-btn, .table-action { cursor: pointer; transition: background 0.2s; }
@@ -105,9 +105,7 @@
                 </div>
             </div>
             <div class="session-toolbar">
-                <span class="session-pill" id="session-status"></span>
                 <button class="toolbar-btn" id="edit-toggle-btn" type="button">Edit Sheet</button>
-                <button class="toolbar-btn" id="logout-btn" type="button" style="display:none;">Log Out</button>
             </div>
             <div id="editor-toolbar" style="display:none;">
                 <button class="toolbar-btn primary" id="add-row-btn" type="button">Add Row</button>
