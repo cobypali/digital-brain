@@ -23,8 +23,9 @@ document.getElementById("signup-form").addEventListener("submit", async (event) 
             document.getElementById("signup-username").value,
             document.getElementById("signup-password").value
         );
-        authMessage.textContent = "";
-        syncAuthUi();
+        authMessage.textContent = "Brain created. Opening Movies.";
+        await syncAuthUi();
+        window.location.href = "movies.html";
     } catch (error) {
         authMessage.textContent = error.message;
     }
@@ -37,8 +38,9 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
             document.getElementById("login-username").value,
             document.getElementById("login-password").value
         );
-        authMessage.textContent = "";
-        syncAuthUi();
+        authMessage.textContent = "Signed in. Opening Movies.";
+        await syncAuthUi();
+        window.location.href = "movies.html";
     } catch (error) {
         authMessage.textContent = error.message;
     }
