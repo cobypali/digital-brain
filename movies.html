@@ -103,14 +103,17 @@
             .page-title { font-size: 24px; margin-bottom: 12px; }
             .page-subtitle { font-size: 14px; }
             #brain-regions-nav {
-                display: block;
+                display: block !important;
+                visibility: visible !important;
+                position: fixed;
                 top: auto;
                 right: 10px;
                 left: 10px;
-                bottom: 10px;
+                bottom: calc(10px + env(safe-area-inset-bottom));
                 padding: 14px;
                 max-height: 150px;
                 overflow-y: auto;
+                z-index: 180;
             }
             #brain-regions-nav ul {
                 display: grid;
@@ -119,7 +122,7 @@
             }
             #brain-regions-nav li a { font-size: 13px; padding: 8px 10px; }
             #brain-regions-nav .back-to-brain { margin-top: 10px; }
-            main { padding-bottom: 210px; }
+            main { padding-bottom: 230px; }
             .modal { padding: 24px; }
         }
     </style>
