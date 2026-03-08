@@ -220,6 +220,7 @@ scene.add(topLight);
 const brainGroup = new THREE.Group();
 scene.add(brainGroup);
 const hotspotMeshes = [];
+let pointerStart = null;
 
 function createHotspotMarker(region, index) {
     const definition = CATEGORY_DEFINITIONS[region.slug];
@@ -248,6 +249,14 @@ function createHotspotMarker(region, index) {
     glow.position.copy(position);
     brainGroup.add(glow);
 
+    const hitArea = new THREE.Mesh(
+        new THREE.SphereGeometry(window.innerWidth <= 768 ? 9 : 6, 16, 16),
+        new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.01 })
+    );
+    hitArea.position.copy(position);
+    hitArea.userData = { slug: region.slug };
+    brainGroup.add(hitArea);
+
     const labelDiv = document.createElement("div");
     labelDiv.className = "hotspot-label";
     labelDiv.textContent = definition.name;
@@ -257,7 +266,7 @@ function createHotspotMarker(region, index) {
     label.position.y += 10;
     brainGroup.add(label);
 
-    hotspotMeshes[index] = { ring, sphere, glow, label };
+    hotspotMeshes[index] = { ring, sphere, glow, hitArea, label };
 }
 
 setAuthMode("login");
@@ -297,26 +306,54 @@ new GLTFLoader().load("3d_brain_model/scene.gltf", (gltf) => {
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
+renderer.domElement.addEventListener("pointerdown", (event) => {
+    pointerStart = { x: event.clientX, y: event.clientY };
+});
+
+renderer.domElement.addEventListener("pointerup", (event) => {
+    if (event.target.closest("nav, #account-panel, #info-panel")) {
+        return;
+    }
+    if (pointerStart) {
+        const dx = event.clientX - pointerStart.x;
+        const dy = event.clientY - pointerStart.y;
+        if (Math.hypot(dx, dy) > 12) {
+            pointerStart = null;
+            return;
+        }
+    }
+    pointerStart = null;
+    const hit = findHotspotAtClientPoint(event.clientX, event.clientY);
+    if (hit) {
+        openRegion(hit);
+    }
+});
+
 window.addEventListener("click", (event) => {
     if (event.target.closest("nav, #account-panel, #info-panel")) {
         return;
     }
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(hotspotMeshes.filter(Boolean).map((entry) => entry.sphere));
-    if (intersects.length > 0) {
-        openRegion(intersects[0].object.userData.slug);
+    const hit = findHotspotAtClientPoint(event.clientX, event.clientY);
+    if (hit) {
+        openRegion(hit);
     }
 });
 
 window.addEventListener("mousemove", (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(hotspotMeshes.filter(Boolean).map((entry) => entry.sphere));
-    document.body.style.cursor = intersects.length ? "pointer" : "grab";
+    const hit = findHotspotAtClientPoint(event.clientX, event.clientY);
+    document.body.style.cursor = hit ? "pointer" : "grab";
 });
+
+function findHotspotAtClientPoint(clientX, clientY) {
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(hotspotMeshes.filter(Boolean).map((entry) => entry.hitArea || entry.sphere));
+    if (intersects.length > 0) {
+        return intersects[0].object.userData.slug;
+    }
+    return null;
+}
 
 let time = 0;
 function animate() {
