@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
-import { CATEGORY_DEFINITIONS, HOME_REGIONS, getSessionUsername, login, logout, signup } from "./brain-store.js";
+import { buildBrainPath, CATEGORY_DEFINITIONS, getPublicBrain, getSessionUser, HOME_REGIONS, login, logout, signup } from "./brain-store.js";
 
 const authMessage = document.getElementById("auth-message");
 const authForms = document.getElementById("auth-forms");
@@ -18,8 +18,12 @@ const authHelper = document.getElementById("auth-helper");
 const authModeLoginBtn = document.getElementById("auth-mode-login");
 const authModeSignupBtn = document.getElementById("auth-mode-signup");
 let activeUsername = null;
+let activeUsernameKey = null;
+let viewedBrain = null;
 let authMode = "login";
 let authBusy = false;
+
+const routeUsernameKey = resolveRouteUsernameKey();
 
 document.getElementById("close-btn").addEventListener("click", () => {
     infoPanel.style.display = "none";
@@ -37,21 +41,23 @@ authForm.addEventListener("submit", async (event) => {
     try {
         setAuthBusy(true);
         if (authMode === "signup") {
-            await signup(
+            const user = await signup(
                 authIdentifier.value,
                 authEmail.value,
                 authPassword.value
             );
-            authMessage.textContent = "Brain created. Opening Movies.";
+            authMessage.textContent = "Brain created. Opening your brain.";
+            await syncAuthUi();
+            window.location.href = buildBrainPath(user.usernameKey);
         } else {
-            await login(
+            const user = await login(
                 authIdentifier.value,
                 authPassword.value
             );
-            authMessage.textContent = "Signed in. Opening Movies.";
+            authMessage.textContent = "Signed in. Opening your brain.";
+            await syncAuthUi();
+            window.location.href = buildBrainPath(user.usernameKey);
         }
-        await syncAuthUi();
-        window.location.href = "movies.html";
     } catch (error) {
         authMessage.textContent = error.message;
     } finally {
@@ -60,15 +66,56 @@ authForm.addEventListener("submit", async (event) => {
 });
 
 document.getElementById("logout-btn").addEventListener("click", () => {
-    logout().then(syncAuthUi);
+    logout().then(async () => {
+        await syncAuthUi();
+        if (routeUsernameKey && viewedBrain?.usernameKey === activeUsernameKey) {
+            window.location.href = "/";
+        }
+    });
 });
 
 async function syncAuthUi() {
-    activeUsername = await getSessionUsername();
-    const loggedIn = Boolean(activeUsername);
+    const sessionUser = await getSessionUser();
+    activeUsername = sessionUser?.username ?? null;
+    activeUsernameKey = sessionUser?.usernameKey ?? null;
+    const loggedIn = Boolean(activeUsernameKey);
     authForms.style.display = loggedIn ? "none" : "grid";
     sessionView.style.display = loggedIn ? "block" : "none";
     sessionUsername.textContent = loggedIn ? `${activeUsername}'s brain is active` : "";
+}
+
+async function syncViewedBrain() {
+    viewedBrain = null;
+    if (!routeUsernameKey) {
+        applyPageIdentity(null);
+        return;
+    }
+
+    try {
+        viewedBrain = await getPublicBrain(routeUsernameKey);
+        applyPageIdentity(viewedBrain);
+        if (window.location.search.includes("brain=")) {
+            window.history.replaceState({}, "", buildBrainPath(viewedBrain.usernameKey));
+        }
+    } catch (error) {
+        authMessage.textContent = error.message;
+        applyPageIdentity({ username: routeUsernameKey, usernameKey: routeUsernameKey });
+    }
+}
+
+function applyPageIdentity(brainUser) {
+    const isPersonalBrain = Boolean(brainUser?.username);
+    const title = isPersonalBrain ? `${brainUser.username}'s Brain` : "DIGITAL BRAIN";
+    const subtitle = isPersonalBrain ? `Explore ${brainUser.username}'s brain` : "Explore a digitized map of your own brain";
+
+    document.title = isPersonalBrain ? `${brainUser.username}'s Brain` : "Digital Brain";
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("page-subtitle").textContent = subtitle;
+    const navHome = document.querySelector('nav a.logo');
+    const navLink = document.querySelector('nav .nav-links a');
+    const homeHref = isPersonalBrain ? buildBrainPath(brainUser.usernameKey) : "/";
+    navHome.href = homeHref;
+    navLink.href = homeHref;
 }
 
 function showInfo(slug) {
@@ -77,12 +124,17 @@ function showInfo(slug) {
     document.getElementById("panel-title").style.color = `#${definition.color.toString(16).padStart(6, "0")}`;
     document.getElementById("panel-brain-region").textContent = `Located in the ${definition.brainRegion}`;
     document.getElementById("panel-description").textContent = definition.description;
-    document.getElementById("panel-link").href = `${slug}.html`;
+    document.getElementById("panel-link").href = resolveRegionHref(slug);
     infoPanel.style.display = "block";
 }
 
 function openRegion(slug) {
-    window.location.href = `${slug}.html`;
+    window.location.href = resolveRegionHref(slug);
+}
+
+function resolveRegionHref(slug) {
+    const targetUsernameKey = viewedBrain?.usernameKey || activeUsernameKey || "";
+    return buildBrainPath(targetUsernameKey, slug);
 }
 
 function setAuthMode(mode) {
@@ -200,6 +252,8 @@ function createHotspotMarker(region, index) {
 
 setAuthMode("login");
 
+syncViewedBrain();
+
 new GLTFLoader().load("3d_brain_model/scene.gltf", (gltf) => {
     const brain = gltf.scene;
     brain.scale.set(100, 100, 100);
@@ -282,3 +336,18 @@ window.addEventListener("resize", () => {
 
 syncAuthUi();
 animate();
+
+function resolveRouteUsernameKey() {
+    const params = new URLSearchParams(window.location.search);
+    const queryBrain = params.get("brain");
+    if (queryBrain) {
+        return queryBrain;
+    }
+
+    const segments = window.location.pathname.split("/").filter(Boolean);
+    if (segments.length === 1 && !segments[0].includes(".")) {
+        return segments[0];
+    }
+
+    return "";
+}

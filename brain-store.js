@@ -75,6 +75,14 @@ function setSession(session) {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
+export function normalizeUsernameKey(username) {
+    return String(username || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9_-]/g, "");
+}
+
 async function request(action, payload = {}) {
     const response = await fetch(getAppsScriptUrl(), {
         method: "POST",
@@ -105,7 +113,7 @@ export async function getSessionUser() {
             setSession(null);
             return null;
         }
-        setSession({ token: session.token, username: data.user.username });
+        setSession({ token: session.token, username: data.user.username, usernameKey: data.user.usernameKey });
         return data.user;
     } catch (error) {
         setSession(null);
@@ -118,15 +126,20 @@ export async function getSessionUsername() {
     return user?.username ?? null;
 }
 
+export async function getSessionUsernameKey() {
+    const user = await getSessionUser();
+    return user?.usernameKey ?? null;
+}
+
 export async function signup(username, email, password) {
     const data = await request("signup", { username, email, password });
-    setSession({ token: data.token, username: data.user.username });
+    setSession({ token: data.token, username: data.user.username, usernameKey: data.user.usernameKey });
     return data.user;
 }
 
 export async function login(identifier, password) {
     const data = await request("login", { identifier, password });
-    setSession({ token: data.token, username: data.user.username });
+    setSession({ token: data.token, username: data.user.username, usernameKey: data.user.usernameKey });
     return data.user;
 }
 
@@ -149,6 +162,24 @@ export async function getCategory(slug) {
     }
     const data = await request("getCategory", { token: session.token, slug });
     return data.category;
+}
+
+export async function getPublicBrain(usernameKey) {
+    const data = await request("publicProfile", { usernameKey: normalizeUsernameKey(usernameKey) });
+    return data.user;
+}
+
+export async function getPublicCategory(usernameKey, slug) {
+    const data = await request("publicCategory", { usernameKey: normalizeUsernameKey(usernameKey), slug });
+    return data.category;
+}
+
+export function buildBrainPath(usernameKey, slug = "") {
+    const normalized = normalizeUsernameKey(usernameKey);
+    if (!normalized) {
+        return slug ? `/${slug}.html` : "/";
+    }
+    return slug ? `/${normalized}/${slug}` : `/${normalized}`;
 }
 
 export async function saveCategory(slug, categoryData) {

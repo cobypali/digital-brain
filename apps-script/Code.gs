@@ -30,6 +30,10 @@ function doPost(e) {
         return jsonResponse(handleGetCategory(payload));
       case 'saveCategory':
         return jsonResponse(handleSaveCategory(payload));
+      case 'publicProfile':
+        return jsonResponse(handlePublicProfile(payload));
+      case 'publicCategory':
+        return jsonResponse(handlePublicCategory(payload));
       case 'adminLogin':
         return jsonResponse(handleAdminLogin(payload));
       case 'adminSession':
@@ -284,7 +288,7 @@ function handleSignup(payload) {
   const master = getMasterSheet();
   master.appendRow([username, usernameKey, email, emailKey, passwordHash, salt, sheetId, new Date().toISOString()]);
   const token = createSession(usernameKey, username);
-  return { ok: true, token: token, user: { username: username } };
+  return { ok: true, token: token, user: { username: username, usernameKey: usernameKey } };
 }
 
 function handleLogin(payload) {
@@ -298,7 +302,7 @@ function handleLogin(payload) {
     throw new Error('Incorrect username or password.');
   }
   const token = createSession(user.usernameKey, user.username);
-  return { ok: true, token: token, user: { username: user.username } };
+  return { ok: true, token: token, user: { username: user.username, usernameKey: user.usernameKey } };
 }
 
 function handleLogout(payload) {
@@ -308,7 +312,7 @@ function handleLogout(payload) {
 
 function handleSession(payload) {
   const session = getSession(payload.token);
-  return { ok: true, user: session ? { username: session.username } : null };
+  return { ok: true, user: session ? { username: session.username, usernameKey: session.usernameKey } : null };
 }
 
 function handleGetCategory(payload) {
@@ -321,6 +325,28 @@ function handleSaveCategory(payload) {
   const session = requireSession(payload.token);
   const user = getUserRowByIdentifier(session.usernameKey);
   return { ok: true, category: writeCategory(user.sheetId, payload.slug, payload.category) };
+}
+
+function handlePublicProfile(payload) {
+  const user = getUserRowByIdentifier(payload.usernameKey || payload.username);
+  if (!user) {
+    throw new Error('Brain not found.');
+  }
+  return {
+    ok: true,
+    user: {
+      username: user.username,
+      usernameKey: user.usernameKey
+    }
+  };
+}
+
+function handlePublicCategory(payload) {
+  const user = getUserRowByIdentifier(payload.usernameKey || payload.username);
+  if (!user) {
+    throw new Error('Brain not found.');
+  }
+  return { ok: true, category: readCategory(user.sheetId, payload.slug) };
 }
 
 function handleAdminLogin(payload) {

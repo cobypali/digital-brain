@@ -1,12 +1,28 @@
-import { CATEGORY_DEFINITIONS, createEmptyRow, getCategory, getSessionUsername, login, logout, saveCategory, signup } from "./brain-store.js";
+import {
+    buildBrainPath,
+    CATEGORY_DEFINITIONS,
+    createEmptyRow,
+    getCategory,
+    getPublicBrain,
+    getPublicCategory,
+    getSessionUser,
+    login,
+    logout,
+    normalizeUsernameKey,
+    saveCategory,
+    signup
+} from "./brain-store.js";
 
-const slug = window.location.pathname.split("/").pop().replace(".html", "");
+const route = resolveRoute();
+const slug = route.slug;
 const definition = CATEGORY_DEFINITIONS[slug];
 const state = {
     category: null,
     sort: { field: definition?.columns[0] ?? "Title", order: "asc" },
     editing: false,
-    username: null
+    username: null,
+    usernameKey: null,
+    viewedBrain: null
 };
 
 if (!definition) {
@@ -14,15 +30,17 @@ if (!definition) {
     throw new Error("Unknown region");
 }
 
-document.title = `${definition.name} | Digital Brain`;
-document.getElementById("page-title").textContent = `Digital Brain ${definition.name}`;
-document.getElementById("page-subtitle").textContent = definition.subtitle;
+applyPageIdentity();
 
 attachEvents();
 renderRegionNav();
 initialize();
 
 async function initialize() {
+    const routeReady = await initializeRouteState();
+    if (!routeReady) {
+        return;
+    }
     await syncSessionUi();
     await renderPage();
 }
@@ -62,10 +80,14 @@ function attachEvents() {
     document.getElementById("signup-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
-            await signup(document.getElementById("signup-username").value, document.getElementById("signup-password").value);
+            const user = await signup(
+                document.getElementById("signup-username").value,
+                document.getElementById("signup-email").value,
+                document.getElementById("signup-password").value
+            );
             closeAuthModal();
             await syncSessionUi();
-            await renderPage();
+            window.location.href = buildBrainPath(user.usernameKey, slug);
         } catch (error) {
             document.getElementById("auth-message").textContent = error.message;
         }
@@ -74,10 +96,10 @@ function attachEvents() {
     document.getElementById("login-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
-            await login(document.getElementById("login-username").value, document.getElementById("login-password").value);
+            const user = await login(document.getElementById("login-identifier").value, document.getElementById("login-password").value);
             closeAuthModal();
             await syncSessionUi();
-            await renderPage();
+            window.location.href = buildBrainPath(user.usernameKey, slug);
         } catch (error) {
             document.getElementById("auth-message").textContent = error.message;
         }
@@ -118,36 +140,57 @@ function attachEvents() {
 function renderRegionNav() {
     const nav = document.getElementById("region-links");
     nav.innerHTML = Object.entries(CATEGORY_DEFINITIONS).map(([key, item]) => `
-        <li><a href="${key}.html" class="${key === slug ? "active" : ""}"><span class="dot" style="background: #${item.color.toString(16).padStart(6, "0")}"></span>${item.name}</a></li>
+        <li><a href="${buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "", key)}" class="${key === slug ? "active" : ""}"><span class="dot" style="background: #${item.color.toString(16).padStart(6, "0")}"></span>${item.name}</a></li>
     `).join("");
+    document.getElementById("back-to-brain-link").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
 }
 
 async function syncSessionUi() {
-    state.username = await getSessionUsername();
-    document.getElementById("session-status").textContent = state.username ? `${state.username}'s brain is active` : "Sign in to edit this sheet";
+    const user = await getSessionUser();
+    state.username = user?.username ?? null;
+    state.usernameKey = user?.usernameKey ?? null;
+
+    const ownsViewedBrain = !state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey;
+    const canEdit = Boolean(state.usernameKey) && ownsViewedBrain;
+    const ownerName = state.viewedBrain?.username || state.username;
+    const status = ownerName
+        ? (canEdit ? `${ownerName}'s brain is active` : `Exploring ${ownerName}'s brain`)
+        : "Sign in to edit this sheet";
+
+    document.getElementById("session-status").textContent = status;
     document.getElementById("logout-btn").style.display = state.username ? "inline-flex" : "none";
-    document.getElementById("edit-toggle-btn").textContent = state.username ? (state.editing ? "Done Editing" : "Edit Sheet") : "Sign In";
+    document.getElementById("edit-toggle-btn").textContent = canEdit ? (state.editing ? "Done Editing" : "Edit Sheet") : (state.username ? "Viewing Only" : "Sign In");
+    document.getElementById("edit-toggle-btn").disabled = state.username ? !canEdit : false;
+    applyPageIdentity();
+    renderRegionNav();
 }
 
 async function renderPage() {
     try {
-        state.category = await getCategory(slug);
+        if (state.viewedBrain) {
+            state.category = await getPublicCategory(state.viewedBrain.usernameKey, slug);
+        } else {
+            state.category = await getCategory(slug);
+        }
     } catch (error) {
         state.category = { slug, name: definition.name, columns: [...definition.columns], rows: [] };
     }
 
-    document.getElementById("item-count").textContent = state.username
-        ? `${state.category.rows.length} entr${state.category.rows.length === 1 ? "y" : "ies"} in ${state.username}'s sheet`
-        : "0 entries loaded";
-    document.getElementById("editor-toolbar").style.display = state.editing && state.username ? "flex" : "none";
+    const ownerName = state.viewedBrain?.username || state.username;
+    const canEdit = Boolean(state.usernameKey) && (!state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey);
+    document.getElementById("item-count").textContent = ownerName
+        ? `${state.category.rows.length} entr${state.category.rows.length === 1 ? "y" : "ies"} in ${ownerName}'s sheet`
+        : `${state.category.rows.length} entr${state.category.rows.length === 1 ? "y" : "ies"} loaded`;
+    document.getElementById("editor-toolbar").style.display = state.editing && canEdit ? "flex" : "none";
     document.getElementById("content").innerHTML = renderTableHtml();
     bindTableHandlers();
 }
 
 function renderTableHtml() {
     const rows = sortRows(state.category.rows);
+    const canEdit = Boolean(state.usernameKey) && (!state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey);
     if (!rows.length) {
-        return `<div class="loading"><p>${state.username ? "No entries yet. Use the edit button to add rows." : "Sign in to create your own sheet."}</p></div>`;
+        return `<div class="loading"><p>${canEdit ? "No entries yet. Use the edit button to add rows." : "This region does not have any entries yet."}</p></div>`;
     }
 
     return `
@@ -161,7 +204,7 @@ function renderTableHtml() {
                             const arrow = isSorted ? (state.sort.order === "asc" ? "&#9650;" : "&#9660;") : "&#9650;";
                             return `<th data-sort="${column}" class="${isSorted ? "sorted" : ""}">${column}<span class="sort-arrow">${arrow}</span></th>`;
                         }).join("")}
-                        ${state.editing && state.username ? "<th>Actions</th>" : ""}
+                        ${state.editing && canEdit ? "<th>Actions</th>" : ""}
                     </tr>
                 </thead>
                 <tbody>
@@ -169,7 +212,7 @@ function renderTableHtml() {
                         <tr>
                             <td class="row-num">${index + 1}</td>
                             ${state.category.columns.map((column, columnIndex) => `<td class="${columnIndex === 0 ? "title-cell" : ""}" data-row="${row.id}" data-open="${columnIndex === 0 ? "true" : "false"}">${escapeHtml(row.values[column] || "-")}</td>`).join("")}
-                            ${state.editing && state.username ? `<td><button class="table-action" data-action="edit" data-row="${row.id}">Edit</button><button class="table-action delete" data-action="delete" data-row="${row.id}">Delete</button></td>` : ""}
+                            ${state.editing && canEdit ? `<td><button class="table-action" data-action="edit" data-row="${row.id}">Edit</button><button class="table-action delete" data-action="delete" data-row="${row.id}">Delete</button></td>` : ""}
                         </tr>
                     `).join("")}
                 </tbody>
@@ -247,7 +290,8 @@ function closeAuthModal() {
 
 function openEditor(rowId) {
     const row = state.category.rows.find((item) => item.id === rowId);
-    if (!row || !state.username) {
+    const canEdit = Boolean(state.usernameKey) && (!state.viewedBrain || state.viewedBrain.usernameKey === state.usernameKey);
+    if (!row || !canEdit) {
         return;
     }
 
@@ -269,6 +313,59 @@ window.closeEditor = closeEditor;
 async function saveAndRender() {
     await saveCategory(slug, state.category);
     await renderPage();
+}
+
+function applyPageIdentity() {
+    const brainName = state.viewedBrain?.username || state.username;
+    document.title = brainName ? `${brainName}'s Brain | ${definition.name}` : `${definition.name} | Digital Brain`;
+    document.getElementById("page-title").textContent = brainName ? `${brainName}'s Brain` : "Digital Brain";
+    document.getElementById("page-subtitle").textContent = brainName
+        ? `Explore ${brainName}'s ${definition.name.toLowerCase()}`
+        : definition.subtitle;
+    document.querySelector("nav .logo").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
+    document.querySelector("nav .nav-links a").href = buildBrainPath(state.viewedBrain?.usernameKey || state.usernameKey || "");
+}
+
+function resolveRoute() {
+    const params = new URLSearchParams(window.location.search);
+    const queryBrain = normalizeUsernameKey(params.get("brain"));
+    const pathSegments = window.location.pathname.split("/").filter(Boolean);
+    const lastSegment = pathSegments[pathSegments.length - 1] || "";
+    const pathSlug = lastSegment.endsWith(".html") ? lastSegment.replace(".html", "") : lastSegment;
+    const explicitSlug = CATEGORY_DEFINITIONS[pathSlug] ? pathSlug : null;
+
+    if (pathSegments.length >= 2 && CATEGORY_DEFINITIONS[pathSegments[pathSegments.length - 1]]) {
+        return {
+            usernameKey: normalizeUsernameKey(pathSegments[pathSegments.length - 2]),
+            slug: pathSegments[pathSegments.length - 1]
+        };
+    }
+
+    return {
+        usernameKey: queryBrain || "",
+        slug: explicitSlug || "movies"
+    };
+}
+
+async function initializeRouteState() {
+    if (!route.usernameKey) {
+        return true;
+    }
+    try {
+        state.viewedBrain = await getPublicBrain(route.usernameKey);
+        renderRegionNav();
+        applyPageIdentity();
+        if (window.location.search.includes("brain=")) {
+            window.history.replaceState({}, "", buildBrainPath(state.viewedBrain.usernameKey, slug));
+        }
+        return true;
+    } catch (error) {
+        document.getElementById("content").innerHTML = `<div class="error"><p>${escapeHtml(error.message)}</p></div>`;
+        document.getElementById("session-status").textContent = "Brain not found";
+        document.getElementById("edit-toggle-btn").style.display = "none";
+        document.getElementById("editor-toolbar").style.display = "none";
+        return false;
+    }
 }
 
 function escapeHtml(value) {

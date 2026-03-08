@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0; url=/" />
+    <title>Redirecting...</title>
+    <script>
+        (function () {
+            const path = window.location.pathname.replace(/\/+$/, "");
+            const parts = path.split("/").filter(Boolean);
+            const categorySlugs = new Set(["movies", "tv", "music", "books", "thoughts"]);
+
+            let destination = "/";
+            if (parts.length === 1 && !parts[0].includes(".")) {
+                destination = "/?brain=" + encodeURIComponent(parts[0]);
+            } else if (parts.length === 2 && !parts[0].includes(".") && categorySlugs.has(parts[1])) {
+                destination = "/" + parts[1] + ".html?brain=" + encodeURIComponent(parts[0]);
+            }
+
+            window.location.replace(destination + window.location.hash);
+        }());
+    </script>
+</head>
+<body></body>
+</html>

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <base href="/">
     <link rel="icon" href="favicons/favicon_v01.png" type="image/png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Brain</title>
@@ -88,15 +89,15 @@
 </head>
 <body>
     <nav>
-        <a href="index.html" class="logo">DIGITAL BRAIN</a>
+        <a href="/" class="logo">DIGITAL BRAIN</a>
         <div class="nav-links">
-            <a href="index.html">Home</a>
+            <a href="/">Home</a>
         </div>
     </nav>
     <div id="brain-regions-nav">
         <h3>Brain Regions</h3>
         <ul id="region-links"></ul>
-        <a href="index.html" class="back-to-brain">Back to Digital Brain</a>
+        <a href="/" class="back-to-brain" id="back-to-brain-link">Back to Digital Brain</a>
     </div>
     <main>
         <div class="blog-section">
@@ -144,11 +145,12 @@
             <div class="auth-grid">
                 <form id="signup-form">
                     <input type="text" id="signup-username" placeholder="Create username" required>
+                    <input type="email" id="signup-email" placeholder="Email address" required>
                     <input type="password" id="signup-password" placeholder="Create password" required>
                     <button class="toolbar-btn primary" type="submit">Create Brain</button>
                 </form>
                 <form id="login-form">
-                    <input type="text" id="login-username" placeholder="Username" required>
+                    <input type="text" id="login-identifier" placeholder="Username or email" required>
                     <input type="password" id="login-password" placeholder="Password" required>
                     <button class="toolbar-btn" type="submit">Sign In</button>
                 </form>
